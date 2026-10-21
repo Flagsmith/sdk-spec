@@ -6,6 +6,7 @@ A harness runs an SDK's steps file for the spec runner. There is one per languag
 | Language | Harness                            |
 | -------- | ---------------------------------- |
 | .NET     | [`harness/dotnet`](harness/dotnet) |
+| Dart     | [`harness/dart`](harness/dart)     |
 | Elixir   | [`harness/elixir`](harness/elixir) |
 | Go       | [`harness/go`](harness/go)         |
 | Java     | [`harness/java`](harness/java)     |
