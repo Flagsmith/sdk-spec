@@ -13,6 +13,7 @@ A harness runs an SDK's steps file for the spec runner. There is one per languag
 | PHP      | [`harness/php`](harness/php)       |
 | Python   | [`harness/python`](harness/python) |
 | Ruby     | [`harness/ruby`](harness/ruby)     |
+| Rust     | [`harness/rust`](harness/rust)     |
 
 ## Finding steps
 
