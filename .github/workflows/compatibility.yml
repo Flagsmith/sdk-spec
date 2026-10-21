@@ -69,17 +69,17 @@ jobs:
             tags: ''
           - name: js-client
             repository: Flagsmith/flagsmith-js-client
-            ref: feat/sdk-spec
+            ref: main
             language: nodejs
             tags: ''
           - name: ios
             repository: Flagsmith/flagsmith-ios-client
-            ref: feat/sdk-spec
+            ref: main
             language: swift
             tags: ''
           - name: android
             repository: Flagsmith/flagsmith-kotlin-android-client
-            ref: feat/sdk-spec
+            ref: main
             language: kotlin
             tags: ''
     uses: ./.github/workflows/run-spec.yml
