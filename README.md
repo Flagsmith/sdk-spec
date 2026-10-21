@@ -7,7 +7,6 @@ executed against every SDK.
 - [`runner/`](runner) — executes the spec (pytest-bdd). Step definitions live here, written once for
   every SDK.
 - [`compose.yml`](compose.yml) — the Flagsmith API (pinned) the spec runs against.
-- [`STEPS.md`](STEPS.md) — the steps every SDK implements.
 - [`harness/`](harness) — one harness per language, running an SDK's steps file
   ([`HARNESS.md`](HARNESS.md)).
 - [`.github/workflows/run-spec.yml`](.github/workflows/run-spec.yml) — reusable workflow SDKs call.
@@ -26,9 +25,16 @@ executed against every SDK.
                     └──────────────────────────────┘
 ```
 
-Each scenario gets its own Flagsmith project and environment. `Given` steps seed it through the
-Admin API, `When` steps run the SDK's steps file to act as an application would, and `Then` steps
-assert on what the SDK returned and on Flagsmith's resulting state.
+Each scenario gets its own Flagsmith project and environment, and the steps split three ways:
+
+- **`Given`** steps set up Flagsmith through the Admin API. The runner implements them.
+- **`When`** steps are the application using the SDK. Every SDK implements every `When` step in
+  its steps file.
+- **`Then`** steps check what the SDK returned and Flagsmith's resulting state. The runner
+  implements them.
+
+The feature files are therefore the whole contract: the `When` steps in `features/` are the steps
+SDKs implement. The runner creates the scenario's SDK client just before its first `When` step.
 
 ## Writing scenarios
 
@@ -38,31 +44,44 @@ assert on what the SDK returned and on Flagsmith's resulting state.
 - Tag every feature with a capability (`@core`, …). SDKs select capabilities with a tag expression.
   Register new tags under `markers` in [`runner/pyproject.toml`](runner/pyproject.toml).
 - Prefer reusing existing steps in [`runner/tests/conftest.py`](runner/tests/conftest.py).
-- Adding an SDK step (in [`runner/sdk_spec/steps.py`](runner/sdk_spec/steps.py) and
-  [`STEPS.md`](STEPS.md)) is a minor version: SDKs that have not implemented it go red with
-  "The SDK does not implement the step: …". Rewording an SDK step is a major version.
+- A new `When` step is registered with one `sdk_step(...)` line in the runner. It is a minor
+  version: SDKs that have not implemented it go red with "The SDK does not implement the step: …".
+  Rewording a `When` step is a major version.
 
 ## Versioning
 
 The spec is released as semver tags (`vX.Y.Z`). SDKs pin a tag, so spec changes never break an SDK
 until it opts in.
 
-- **Major** — changed behaviour, reworded SDK steps, or a changed harness protocol.
-- **Minor** — new scenarios, tags or SDK steps.
+- **Major** — changed behaviour, reworded `When` steps, or a changed harness protocol.
+- **Minor** — new scenarios, tags or `When` steps.
 - **Patch** — wording and runner fixes.
 
 Each release also pins the Flagsmith version in `compose.yml` that it was verified against.
 
 ## Onboarding an SDK
 
-1. Add `sdk-spec/steps.<ext>` to the SDK repository. Write one function per step in
-   [`STEPS.md`](STEPS.md), each directly below a comment holding the step's exact text:
+1. Add `sdk-spec/steps.<ext>` to the SDK repository: a function creating the SDK client, and one
+   function per `When` step in [`features/`](features). Mark each with a comment directly above it:
 
    ```python
+   # Create the SDK client
+   def create_client(environment_key, api_url):
+       return Flagsmith(environment_key=environment_key, api_url=api_url)
+
+
    # When the application gets the environment flags
    def get_environment_flags(flagsmith):
        return as_spec_flags(flagsmith.get_environment_flags())
    ```
+
+   - `Create the SDK client` receives a server-side environment key and the Flagsmith API URL, and
+     returns a client created with default options.
+   - A `When` step receives the client, then the step's placeholders in order, then its data table.
+     A `<key> | value` table arrives as a map, e.g. `{"plan": "premium", "age": 30}`.
+   - Values are JSON values. Pass flag and trait values through with their types intact.
+   - Steps that get flags return a list of `{"feature": …, "enabled": …, "value": …}`.
+   - Let SDK errors propagate: the scenario fails with the error.
 
    Keep it to SDK calls. The steps file doubles as a working, CI-checked usage example.
 
@@ -80,9 +99,9 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
        branches: [main]
    jobs:
      sdk-spec:
-       uses: Flagsmith/sdk-spec/.github/workflows/run-spec.yml@v0.2.0
+       uses: Flagsmith/sdk-spec/.github/workflows/run-spec.yml@v0.3.0
        with:
-         spec-ref: v0.2.0  # keep in sync with `uses:`
+         spec-ref: v0.3.0  # keep in sync with `uses:`
          language: python
          tags: core        # optional: select capabilities
    ```

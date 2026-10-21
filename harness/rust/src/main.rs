@@ -110,7 +110,7 @@ fn respond(
             };
             response.insert(
                 "error".into(),
-                json!(format!("The step must return {expected}; see STEPS.md")),
+                json!(format!("The step must return {expected}")),
             );
         }
         Err(e) => {

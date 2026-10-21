@@ -5,7 +5,7 @@
 # Requires Jason, which the SDK is expected to depend on.
 
 defmodule SDKSpec.Harness do
-  @marker ~r/^\s*#+\s*((?:Given|When|Then) .+?)\s*$/
+  @marker ~r/^\s*#+\s*(When .+?|Create the SDK client)\s*$/
   @function ~r/^\s*def\s+([a-z_][a-zA-Z0-9_]*[?!]?)/
 
   def main([path]) do

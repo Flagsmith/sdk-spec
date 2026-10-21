@@ -1,6 +1,6 @@
 # Java harness
 
-Runs a Java SDK's [steps file](../../STEPS.md) for the spec runner, speaking the
+Runs a Java SDK's [steps file](../../README.md#onboarding-an-sdk) for the spec runner, speaking the
 [harness protocol](../../HARNESS.md) over stdin and stdout.
 
 ## Finding steps

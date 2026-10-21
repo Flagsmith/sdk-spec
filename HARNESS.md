@@ -17,9 +17,10 @@ A harness runs an SDK's steps file for the spec runner. There is one per languag
 
 ## Finding steps
 
-- A step marker is a line comment whose text starts with `Given `, `When ` or `Then `.
+- A step marker is a line comment holding either `Create the SDK client` or a step starting with
+  `When `, e.g. `When the application gets the environment flags`.
 - The marked function is the first function defined after the marker.
-- The marker text identifies the step, and must match the text in [`STEPS.md`](STEPS.md) exactly.
+- The marker text identifies the step, and must match the runner's text exactly.
 
 Find steps at runtime where the language allows it. Otherwise, generate a dispatch table at build time
 inside the SDK's Docker build (Go does this, for example).
@@ -38,7 +39,7 @@ harness over stdin and stdout, one per line. Each request has an `id`, and its r
 
 ```json
 {"id": 1, "command": "hello"}
-{"id": 1, "steps": ["Given an SDK client for the environment", "..."]}
+{"id": 1, "steps": ["Create the SDK client", "When the application gets the environment flags"]}
 ```
 
 `steps` lists every step the steps file implements.
@@ -46,7 +47,7 @@ harness over stdin and stdout, one per line. Each request has an `id`, and its r
 ### `step`
 
 ```json
-{"id": 2, "command": "step", "step": "Given an SDK client for the environment", "args": ["ser.abc", "http://flagsmith:8000/api/v1/"], "client": null, "returnsClient": true}
+{"id": 2, "command": "step", "step": "Create the SDK client", "args": ["ser.abc", "http://flagsmith:8000/api/v1/"], "client": null, "returnsClient": true}
 {"id": 2, "client": "1"}
 
 {"id": 3, "command": "step", "step": "When the application gets the environment flags", "args": [], "client": "1", "returnsClient": false}

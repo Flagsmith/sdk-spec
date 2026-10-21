@@ -13,7 +13,6 @@ Feature: Get environment flags
       | max_items | false   | 42        |
       | dark_mode | true    | true      |
       | beta      | true    | null      |
-    And an SDK client for the environment
     When the application gets the environment flags
     Then the application receives the following flags:
       | feature   | enabled | value     |

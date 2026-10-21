@@ -1,6 +1,6 @@
 # Rust harness
 
-Runs a Rust SDK's [steps file](../../STEPS.md) under the spec. See [`HARNESS.md`](../../HARNESS.md).
+Runs a Rust SDK's [steps file](../../README.md#onboarding-an-sdk) under the spec. See [`HARNESS.md`](../../HARNESS.md).
 
 Rust cannot call a function by name at runtime, so the harness compiles the steps file in.
 [`build.rs`](build.rs) finds the step markers in `sdk-spec/steps.rs` and generates a dispatch table:
@@ -48,8 +48,8 @@ return value. [`src/main.rs`](src/main.rs) speaks the protocol over stdin and st
 ## Step functions
 
 - Step functions are `pub fn`, marked with a `//` comment holding the step's text.
-- A step that uses a client takes it first, as `&Client` or `&mut Client`. A step that does not take a
-  client creates one and returns it.
+- `When` steps take the client first, as `&Client` or `&mut Client`. The `Create the SDK client`
+  function takes no client and returns one.
 - Other parameters take any type that deserialises from the JSON argument, e.g. `String` or
   `HashMap<String, V>` for a data table.
 - Return any type that serialises to JSON, or a `Result` of one. A `Result` is recognised by its

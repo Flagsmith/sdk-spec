@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 
 type Step = (...args: unknown[]) => unknown;
 
-const MARKER = /^\s*\/\/+\s*((?:Given|When|Then) .+?)\s*$/;
+const MARKER = /^\s*\/\/+\s*(When .+?|Create the SDK client)\s*$/;
 const FUNCTION =
     /^\s*(?:export\s+)?(?:async\s+)?function\s*\*?\s*(\w+)|^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=/;
 
