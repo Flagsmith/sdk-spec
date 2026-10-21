@@ -95,4 +95,7 @@ jobs:
       sdk-ref: ${{ matrix.sdk.ref }}
       language: ${{ matrix.sdk.language }}
       tags: ${{ matrix.sdk.tags }}
+      # A new When step is expected to be missing from SDKs until they implement it, so it
+      # shouldn't turn the matrix red. Real failures still do.
+      missing-steps: xfail
       results-name: sdk-spec-results-${{ matrix.sdk.name }}

@@ -2,6 +2,7 @@
 
 import itertools
 import json
+import os
 import queue
 import shlex
 import subprocess
@@ -12,6 +13,14 @@ from typing import Any
 import pytest
 
 STEPS_DOCS_URL = "https://github.com/Flagsmith/sdk-spec/blob/main/README.md#onboarding-an-sdk"
+# `fail` (default): a step the SDK does not implement fails its scenario.
+# `xfail`: it marks the scenario as an expected failure instead, so the run stays green.
+MISSING_STEPS = os.environ.get("MISSING_STEPS", "fail")
+if MISSING_STEPS not in ("fail", "xfail"):
+    raise ValueError(f"MISSING_STEPS must be `fail` or `xfail`, not {MISSING_STEPS!r}")
+
+# Steps the SDK does not implement, as seen during this run.
+missing_steps: set[str] = set()
 RESPONSE_TIMEOUT_SECONDS = 60
 
 
@@ -93,11 +102,14 @@ class SDK:
             }
         )
         if response.get("missing"):
-            pytest.fail(
+            missing_steps.add(step)
+            message = (
                 f"The SDK does not implement the step:\n\n    {step}\n\n"
-                f"Add it to the SDK's steps file as described in {STEPS_DOCS_URL}",
-                pytrace=False,
+                f"Add it to the SDK's steps file as described in {STEPS_DOCS_URL}"
             )
+            if MISSING_STEPS == "xfail":
+                pytest.xfail(message)
+            pytest.fail(message, pytrace=False)
         if "error" in response:
             pytest.fail(f"The SDK raised an error in `{step}`:\n\n{response['error']}", pytrace=False)
         return response.get("client") if returns_client else response.get("result")

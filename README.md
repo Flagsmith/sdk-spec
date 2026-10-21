@@ -47,6 +47,10 @@ SDKs implement. The runner creates the scenario's SDK client just before its fir
 - A new `When` step is registered with one `sdk_step(...)` line in the runner. It is a minor
   version: SDKs that have not implemented it go red with "The SDK does not implement the step: …".
   Rewording a `When` step is a major version.
+- The [compatibility matrix](.github/workflows/compatibility.yml) runs with `missing-steps: xfail`:
+  scenarios using a step an SDK has not implemented yet are expected failures, reported as warnings,
+  so a pull request adding a step stays green unless something else breaks. SDK repositories keep
+  the default, `fail`.
 
 ## Versioning
 
@@ -146,6 +150,7 @@ uv run pytest -v
 | Variable            | Default                 | Purpose                                         |
 | ------------------- | ----------------------- | ----------------------------------------------- |
 | `SDK_COMMAND`       | (required)              | Starts the SDK under its harness                |
+| `MISSING_STEPS`     | `fail`                  | `xfail` makes missing steps expected failures   |
 | `FLAGSMITH_URL`     | `http://localhost:8000` | Where the runner reaches Flagsmith              |
 | `FLAGSMITH_SDK_URL` | `$FLAGSMITH_URL`        | Where the SDK reaches Flagsmith                 |
 | `FLAGSMITH_PORT`    | `8000`                  | Host port for Flagsmith (`compose.yml`)         |
