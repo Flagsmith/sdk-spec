@@ -1,5 +1,5 @@
-# The stack the spec runs against: a real Flagsmith API and the SDK adapter under test.
-# The runner itself runs on the host (see README.md).
+# The Flagsmith API the spec runs against. The runner runs on the host and starts the
+# SDK under test in a container on this compose project's network (see README.md).
 name: sdk-spec
 
 services:
@@ -34,12 +34,3 @@ services:
       postgres:
         condition: service_healthy
 
-  sdk-adapter:
-    image: ${SDK_ADAPTER_IMAGE:-sdk-spec-adapter}
-    environment:
-      PORT: 8080
-    ports:
-      - ${SDK_ADAPTER_PORT:-8080}:8080
-    depends_on:
-      flagsmith:
-        condition: service_healthy

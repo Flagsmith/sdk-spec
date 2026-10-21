@@ -23,8 +23,9 @@ jobs:
         sdk:
           - name: python
             repository: Flagsmith/flagsmith-python-client
-            # TODO: switch to main once the adapter is merged.
+            # TODO: switch to main once the SDK spec PR is merged.
             ref: feat/sdk-spec
+            language: python
             tags: ''
     uses: ./.github/workflows/run-spec.yml
     with:
@@ -32,5 +33,6 @@ jobs:
       spec-ref: ${{ github.event.pull_request.head.sha || github.sha }}
       sdk-repository: ${{ matrix.sdk.repository }}
       sdk-ref: ${{ matrix.sdk.ref }}
+      language: ${{ matrix.sdk.language }}
       tags: ${{ matrix.sdk.tags }}
       results-name: sdk-spec-results-${{ matrix.sdk.name }}
