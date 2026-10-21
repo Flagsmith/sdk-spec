@@ -39,11 +39,11 @@ public func generateTable(_ steps: [Step], from stepsFile: String) -> String {
     return code + "]\n"
 }
 
-/// A step marker is a line comment holding `Create the SDK client` or a step starting with `When `.
+/// A step marker is a line comment starting with `Create the SDK client` or `When `.
 func marker(_ line: String) -> String? {
     guard line.hasPrefix("//") else { return nil }
     let text = line.drop { $0 == "/" }.trimmingCharacters(in: .whitespaces)
-    return text == "Create the SDK client" || text.hasPrefix("When ") ? text : nil
+    return text.hasPrefix("Create the SDK client") || text.hasPrefix("When ") ? text : nil
 }
 
 // `func` after any attributes and modifiers, e.g. `@MainActor public func createClient(`.

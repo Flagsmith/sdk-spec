@@ -48,7 +48,7 @@ return value. [`src/main.rs`](src/main.rs) speaks the protocol over stdin and st
 ## Step functions
 
 - Step functions are `pub fn`, marked with a `//` comment holding the step's text.
-- `When` steps take the client first, as `&Client` or `&mut Client`. The `Create the SDK client`
+- `When` steps take the client first, as `&Client` or `&mut Client`. A `Create the SDK client…`
   function takes no client and returns one.
 - Other parameters take any type that deserialises from the JSON argument, e.g. `String` or
   `HashMap<String, V>` for a data table.

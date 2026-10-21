@@ -19,7 +19,7 @@ import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import kotlin.system.exitProcess
 
-private val MARKER = Regex("""^\s*//+\s*(When .+?|Create the SDK client)\s*$""")
+private val MARKER = Regex("""^\s*//+\s*(When .+?|Create the SDK client.*?)\s*$""")
 private val FUNCTION = Regex("""^\s*(?:[\w@]+\s+)*fun\s+(\w+)\s*\(""")
 private val PACKAGE = Regex("""^\s*package\s+([\w.]+)""")
 private val JVM_NAME = Regex("""^\s*@file:JvmName\("(\w+)"\)""")

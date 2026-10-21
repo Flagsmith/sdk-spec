@@ -6,7 +6,7 @@ executed against every SDK.
 - [`features/`](features) — the spec. One `.feature` file per behaviour.
 - [`runner/`](runner) — executes the spec (pytest-bdd). Step definitions live here, written once for
   every SDK.
-- [`compose.yml`](compose.yml) — the Flagsmith API (pinned) the spec runs against.
+- [`compose.yml`](compose.yml) — the Flagsmith services (pinned) the spec runs against.
 - [`harness/`](harness) — one harness per language, running an SDK's steps file
   ([`HARNESS.md`](HARNESS.md)).
 - [`.github/workflows/run-spec.yml`](.github/workflows/run-spec.yml) — reusable workflow SDKs call.
@@ -20,9 +20,16 @@ executed against every SDK.
  │ runner │ ────────────────────────────────► │ Flagsmith │
  │        │                                   └───────────┘
  │        │  stdio  ┌──────────────────────────────┐  ▲
- │        │ ──────► │ harness ─► SDK steps file    │──┘ SDK API calls
- └────────┘         │ (SDK image, built from source)│
-                    └──────────────────────────────┘
+ │        │ ──────► │ harness ─► SDK steps file    │──┤ SDK API calls
+ │        │         │ (SDK image, built from source)│  │
+ │        │         └──────────────────────────────┘  │ events
+ │        │                                   ┌───────▼────┐
+ │        │                                   │ events API │
+ │        │                                   └───────┬────┘
+ │        │  read the delivered events                │ warehouse delivery
+ └────────┘ ────────────────────────────────► ┌───────▼───┐
+                                              │ warehouse │
+                                              └───────────┘
 ```
 
 Each scenario gets its own Flagsmith project and environment, and the steps split three ways:
@@ -35,6 +42,14 @@ Each scenario gets its own Flagsmith project and environment, and the steps spli
 
 The feature files are therefore the whole contract: the `When` steps in `features/` are the steps
 SDKs implement. The runner creates the scenario's SDK client just before its first `When` step.
+
+Tracking and exposure events take a longer path: an SDK sends them to Flagsmith's events API, which
+queues them for warehouse delivery to insert into the environment's warehouse.
+[`compose.yml`](compose.yml) runs that whole path, as Flagsmith's own `docker-compose.yml` does, with
+a ClickHouse standing in for the environment's warehouse. A scenario that says
+`Given the SDK sends events to Flagsmith` gets the warehouse connected to its environment — the
+events API only accepts an environment that has one — and a client with events enabled pointed at
+the events API. The runner then reads the delivered events out of the warehouse.
 
 ## Writing scenarios
 
@@ -81,6 +96,9 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
 
    - `Create the SDK client` receives a server-side environment key and the Flagsmith API URL, and
      returns a client created with default options.
+   - `Create the SDK client with events enabled` receives the same two, then the base URL of
+     Flagsmith's events API, and returns a client that sends events there. Only `@events`
+     scenarios use it, so an SDK without event tracking can leave it out.
    - A `When` step receives the client, then the step's placeholders in order, then its data table.
      A `<key> | value` table arrives as a map, e.g. `{"plan": "premium", "age": 30}`.
    - Values are JSON values. Pass flag and trait values through with their types intact.
@@ -155,6 +173,13 @@ uv run pytest -v
 | `FLAGSMITH_SDK_URL` | `$FLAGSMITH_URL`        | Where the SDK reaches Flagsmith                 |
 | `FLAGSMITH_PORT`    | `8000`                  | Host port for Flagsmith (`compose.yml`)         |
 | `FLAGSMITH_IMAGE`   | pinned version          | Override the Flagsmith image (`compose.yml`)    |
+| `EVENTS_SDK_URL`    | `http://events:8080`    | Where the SDK reaches the events API            |
+| `EVENTS_PORT`       | `8080`                  | Host port for the events API (`compose.yml`)    |
+| `WAREHOUSE_URL`     | `http://localhost:8123` | Where the runner reaches the warehouse          |
+| `WAREHOUSE_HOST`    | `clickhouse`            | Where Flagsmith reaches the warehouse           |
+| `CLICKHOUSE_PORT`   | `8123`                  | Host port for the warehouse (`compose.yml`)     |
 
 `SDK_COMMAND` can be any command, so you can also run a harness straight against an SDK checkout,
 without Docker, e.g. `python ../harness/python/harness.py ../../flagsmith-python-client/sdk-spec/steps.py`.
+An SDK running on the host reaches the services on the host's ports, so set
+`FLAGSMITH_SDK_URL=$FLAGSMITH_URL` and `EVENTS_SDK_URL=http://localhost:8080` with it.

@@ -31,7 +31,7 @@ import java.util.regex.Pattern;
 public class Harness {
 
   private static final Pattern MARKER =
-      Pattern.compile("^\\s*//+\\s*(When .+?|Create the SDK client)\\s*$");
+      Pattern.compile("^\\s*//+\\s*(When .+?|Create the SDK client.*?)\\s*$");
   private static final Pattern METHOD =
       Pattern.compile("^\\s*(?:[\\w@]+\\s+)*static\\s+[^=;(]+?\\s(\\w+)\\s*\\(");
   private static final Pattern PACKAGE = Pattern.compile("^\\s*package\\s+([\\w.]+)\\s*;");

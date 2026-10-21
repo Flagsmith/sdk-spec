@@ -17,4 +17,5 @@ testpaths = ["tests"]
 addopts = "--strict-markers -p no:cacheprovider"
 markers = [
     "core: Behaviour every SDK must implement",
+    "events: Tracking and exposure events, powering experimentation",
 ]

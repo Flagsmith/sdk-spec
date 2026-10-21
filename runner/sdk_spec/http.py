@@ -33,11 +33,14 @@ def json_request(
     return json.loads(raw) if raw else None
 
 
-def wait_until_ok(url: str, timeout_seconds: float) -> Any:
+def wait_until_ok(url: str, timeout_seconds: float, expect_json: bool = True) -> Any:
     deadline = time.monotonic() + timeout_seconds
     while True:
         try:
-            return json_request("GET", url, timeout=5)
+            if expect_json:
+                return json_request("GET", url, timeout=5)
+            with urllib.request.urlopen(url, timeout=5) as response:
+                return response.read()
         except (urllib.error.URLError, ConnectionError, HTTPError) as e:
             if time.monotonic() > deadline:
                 raise TimeoutError(f"{url} did not become healthy: {e}") from e

@@ -12,7 +12,7 @@ step text. At runtime, `harness.dart` calls them with `Function.apply`.
 
 - Step functions are public, top-level functions in `sdk-spec/steps.dart`, each below its step marker
   (`// Create the SDK client`, `// When …`). Import the SDK by its package name.
-- `Create the SDK client` returns the client. `When` steps take it first.
+- A `Create the SDK client…` step returns the client. `When` steps take it first.
 - Arguments arrive as decoded JSON: `String`, `int`, `double`, `bool`, `null`, and data tables as
   `Map<String, dynamic>`. Declare them with those types, e.g. `Map<String, Object?> traits`.
 - Return a JSON-encodable value, or a `Future` of one.
