@@ -20,7 +20,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # SDKs whose spec PR is still open run their feat/sdk-spec branch.
         sdk:
           - name: python
             repository: Flagsmith/flagsmith-python-client
@@ -79,12 +78,12 @@ jobs:
             tags: ''
           - name: android
             repository: Flagsmith/flagsmith-kotlin-android-client
-            ref: feat/sdk-spec
+            ref: main
             language: kotlin
             tags: ''
           - name: flutter
             repository: Flagsmith/flagsmith-flutter-client
-            ref: feat/sdk-spec
+            ref: main
             language: dart
             tags: ''
     uses: ./.github/workflows/run-spec.yml
