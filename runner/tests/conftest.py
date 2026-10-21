@@ -10,6 +10,7 @@ import pytest
 from pytest_bdd import given, parsers, then, when
 
 from sdk_spec.flagsmith_admin import Environment, FlagsmithAdmin
+from sdk_spec import sdk as sdk_module
 from sdk_spec.sdk import SDK
 
 # Where the runner reaches Flagsmith, to seed and inspect it.
@@ -25,7 +26,22 @@ def pytest_report_header() -> list[str]:
     return [
         f"flagsmith: {FLAGSMITH_URL} (SDK uses {FLAGSMITH_SDK_URL})",
         f"sdk: {SDK_COMMAND}",
+        f"missing steps: {sdk_module.MISSING_STEPS}",
     ]
+
+
+def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter) -> None:
+    """Lists the steps the SDK does not implement, as GitHub annotations when in Actions."""
+    if not sdk_module.missing_steps:
+        return
+    terminalreporter.section("steps the SDK does not implement")
+    for step in sorted(sdk_module.missing_steps):
+        terminalreporter.write_line(step)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            level = "warning" if sdk_module.MISSING_STEPS == "xfail" else "error"
+            terminalreporter.write_line(
+                f"::{level} title=SDK does not implement a step::{step}"
+            )
 
 
 @dataclass

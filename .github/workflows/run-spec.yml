@@ -51,6 +51,12 @@ on:
         description: Override the Flagsmith image the spec is pinned to.
         type: string
         default: ''
+      missing-steps:
+        description: >-
+          `fail` or `xfail`. With `xfail`, scenarios using a step the SDK does not implement are expected
+          failures and keep the job green; the steps are reported as warnings.
+        type: string
+        default: fail
       results-name:
         description: Name of the uploaded JUnit results artifact. Must be unique per workflow run.
         type: string
@@ -112,6 +118,7 @@ jobs:
           FLAGSMITH_SDK_URL: http://flagsmith:8000
           SDK_COMMAND: docker run --interactive --rm --network sdk-spec_default ${{ env.SDK_IMAGE }}
           TAGS: ${{ inputs.tags }}
+          MISSING_STEPS: ${{ inputs.missing-steps }}
         run: |
           uv run pytest -v --junitxml="$GITHUB_WORKSPACE/spec-results.xml" ${TAGS:+-m "$TAGS"}
 
