@@ -1,0 +1,35 @@
+# Runs the spec at this commit against every onboarded SDK's default branch.
+# On pull requests this shows which SDKs a spec change would break; nightly it
+# catches SDK changes that drift from the spec.
+name: SDK compatibility
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: ${{ matrix.sdk.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk:
+          - name: python
+            repository: Flagsmith/flagsmith-python-client
+            ref: main
+            tags: ''
+    uses: ./.github/workflows/run-spec.yml
+    with:
+      spec-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      spec-ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      sdk-repository: ${{ matrix.sdk.repository }}
+      sdk-ref: ${{ matrix.sdk.ref }}
+      tags: ${{ matrix.sdk.tags }}
+      results-name: sdk-spec-results-${{ matrix.sdk.name }}

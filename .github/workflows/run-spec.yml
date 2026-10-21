@@ -1,0 +1,118 @@
+# Reusable workflow: runs the behavioural spec at `spec-ref` against the calling SDK.
+#
+# Usage from an SDK repository:
+#
+#   jobs:
+#     sdk-spec:
+#       uses: Flagsmith/sdk-spec/.github/workflows/run-spec.yml@v0.1.0
+#       with:
+#         spec-ref: v0.1.0
+name: Run SDK spec
+
+on:
+  workflow_call:
+    inputs:
+      spec-ref:
+        description: Spec tag (or commit) to run. Keep it in sync with the ref in `uses:`.
+        type: string
+        required: true
+      spec-repository:
+        description: Repository holding the spec.
+        type: string
+        default: Flagsmith/sdk-spec
+      tags:
+        description: >-
+          pytest marker expression selecting scenarios by Gherkin tag, e.g. "core and not realtime".
+          Empty runs every scenario.
+        type: string
+        default: ''
+      adapter-dockerfile:
+        description: Path to the SDK adapter Dockerfile, relative to the SDK repository root.
+        type: string
+        default: spec-adapter/Dockerfile
+      adapter-context:
+        description: Docker build context for the adapter, relative to the SDK repository root.
+        type: string
+        default: .
+      sdk-repository:
+        description: SDK repository to test. Defaults to the calling repository.
+        type: string
+        default: ''
+      sdk-ref:
+        description: SDK ref to test. Defaults to the triggering ref.
+        type: string
+        default: ''
+      flagsmith-image:
+        description: Override the Flagsmith image the spec is pinned to.
+        type: string
+        default: ''
+      results-name:
+        description: Name of the uploaded JUnit results artifact. Must be unique per workflow run.
+        type: string
+        default: sdk-spec-results
+
+permissions:
+  contents: read
+
+jobs:
+  spec:
+    name: Spec ${{ inputs.spec-ref }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SDK_ADAPTER_IMAGE: sdk-spec-adapter:local
+      FLAGSMITH_IMAGE: ${{ inputs.flagsmith-image }}
+    steps:
+      - name: Check out SDK
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.sdk-repository || github.repository }}
+          ref: ${{ inputs.sdk-ref }}
+          path: sdk
+
+      - name: Check out spec
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.spec-repository }}
+          ref: ${{ inputs.spec-ref }}
+          path: spec
+
+      - name: Build SDK adapter
+        working-directory: sdk
+        env:
+          DOCKERFILE: ${{ inputs.adapter-dockerfile }}
+          CONTEXT: ${{ inputs.adapter-context }}
+        run: docker build --tag "$SDK_ADAPTER_IMAGE" --file "$DOCKERFILE" "$CONTEXT"
+
+      - name: Start Flagsmith and SDK adapter
+        working-directory: spec
+        run: |
+          [ -n "$FLAGSMITH_IMAGE" ] || unset FLAGSMITH_IMAGE
+          docker compose up --detach --wait --wait-timeout 300
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          working-directory: spec/runner
+
+      - name: Run spec
+        working-directory: spec/runner
+        env:
+          FLAGSMITH_URL: http://localhost:8000
+          FLAGSMITH_SDK_URL: http://flagsmith:8000
+          SDK_ADAPTER_URL: http://localhost:8080
+          TAGS: ${{ inputs.tags }}
+        run: |
+          uv run pytest -v --junitxml="$GITHUB_WORKSPACE/spec-results.xml" ${TAGS:+-m "$TAGS"}
+
+      - name: Show container logs
+        if: failure()
+        working-directory: spec
+        run: docker compose logs
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.results-name }}
+          path: spec-results.xml
+          if-no-files-found: ignore
