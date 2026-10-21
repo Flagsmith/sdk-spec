@@ -4,9 +4,10 @@
 #
 #   jobs:
 #     sdk-spec:
-#       uses: Flagsmith/sdk-spec/.github/workflows/run-spec.yml@v0.1.0
+#       uses: Flagsmith/sdk-spec/.github/workflows/run-spec.yml@v0.2.0
 #       with:
-#         spec-ref: v0.1.0
+#         spec-ref: v0.2.0
+#         language: python
 name: Run SDK spec
 
 on:
@@ -26,12 +27,16 @@ on:
           Empty runs every scenario.
         type: string
         default: ''
-      adapter-dockerfile:
-        description: Path to the SDK adapter Dockerfile, relative to the SDK repository root.
+      language:
+        description: Harness to build the SDK image with, i.e. a directory under `harness/` in the spec.
         type: string
-        default: spec-adapter/Dockerfile
-      adapter-context:
-        description: Docker build context for the adapter, relative to the SDK repository root.
+        required: true
+      dockerfile:
+        description: Path to the SDK's spec Dockerfile, relative to the SDK repository root.
+        type: string
+        default: sdk-spec/Dockerfile
+      context:
+        description: Docker build context for the SDK image, relative to the SDK repository root.
         type: string
         default: .
       sdk-repository:
@@ -60,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      SDK_ADAPTER_IMAGE: sdk-spec-adapter:local
+      SDK_IMAGE: sdk-spec-sdk:local
       FLAGSMITH_IMAGE: ${{ inputs.flagsmith-image }}
     steps:
       - name: Check out SDK
@@ -77,14 +82,20 @@ jobs:
           ref: ${{ inputs.spec-ref }}
           path: spec
 
-      - name: Build SDK adapter
+      - name: Build SDK image
         working-directory: sdk
         env:
-          DOCKERFILE: ${{ inputs.adapter-dockerfile }}
-          CONTEXT: ${{ inputs.adapter-context }}
-        run: docker build --tag "$SDK_ADAPTER_IMAGE" --file "$DOCKERFILE" "$CONTEXT"
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          CONTEXT: ${{ inputs.context }}
+          HARNESS: ${{ github.workspace }}/spec/harness/${{ inputs.language }}
+        run: |
+          if [ ! -d "$HARNESS" ]; then
+            echo "::error::No harness for language '$(basename "$HARNESS")' in the spec"
+            exit 1
+          fi
+          docker build --tag "$SDK_IMAGE" --file "$DOCKERFILE" --build-context harness="$HARNESS" "$CONTEXT"
 
-      - name: Start Flagsmith and SDK adapter
+      - name: Start Flagsmith
         working-directory: spec
         run: |
           [ -n "$FLAGSMITH_IMAGE" ] || unset FLAGSMITH_IMAGE
@@ -99,7 +110,7 @@ jobs:
         env:
           FLAGSMITH_URL: http://localhost:8000
           FLAGSMITH_SDK_URL: http://flagsmith:8000
-          SDK_ADAPTER_URL: http://localhost:8080
+          SDK_COMMAND: docker run --interactive --rm --network sdk-spec_default ${{ env.SDK_IMAGE }}
           TAGS: ${{ inputs.tags }}
         run: |
           uv run pytest -v --junitxml="$GITHUB_WORKSPACE/spec-results.xml" ${TAGS:+-m "$TAGS"}

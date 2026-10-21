@@ -1,0 +1,15 @@
+[package]
+name = "sdk-spec-harness"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Rust harness for the Flagsmith SDK behavioural spec. See HARNESS.md."
+
+# Not part of any workspace the SDK may define.
+[workspace]
+
+[dependencies]
+serde = "1.0"
+serde_json = "1.0"
+# The SDK's steps file, as the crate `sdk-spec/Cargo.toml` in the SDK checkout next to the harness.
+steps = { package = "sdk-spec", path = "../sdk/sdk-spec" }

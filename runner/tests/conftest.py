@@ -7,28 +7,30 @@ from typing import Any
 import pytest
 from pytest_bdd import given, parsers, then, when
 
-from sdk_spec.adapter import Adapter
+from sdk_spec import steps
 from sdk_spec.flagsmith_admin import Environment, FlagsmithAdmin
+from sdk_spec.sdk import SDK
 
 # Where the runner reaches Flagsmith, to seed and inspect it.
 FLAGSMITH_URL = os.environ.get("FLAGSMITH_URL", "http://localhost:8000")
 # Where the SDK under test reaches Flagsmith. Differs from FLAGSMITH_URL when the
-# adapter runs on a different network, e.g. a container network.
+# SDK runs on a different network, e.g. a container network.
 FLAGSMITH_SDK_URL = os.environ.get("FLAGSMITH_SDK_URL", FLAGSMITH_URL)
-SDK_ADAPTER_URL = os.environ.get("SDK_ADAPTER_URL", "http://localhost:8080")
+# Starts the SDK's language harness, e.g. `docker run -i --rm sdk-spec-sdk`.
+SDK_COMMAND = os.environ.get("SDK_COMMAND", "")
 
 
 def pytest_report_header() -> list[str]:
     return [
         f"flagsmith: {FLAGSMITH_URL} (SDK uses {FLAGSMITH_SDK_URL})",
-        f"sdk adapter: {SDK_ADAPTER_URL}",
+        f"sdk: {SDK_COMMAND}",
     ]
 
 
 @dataclass
 class ScenarioState:
     environment: Environment | None = None
-    client_id: str | None = None
+    client: str | None = None
     flags: list[dict[str, Any]] | None = None
 
 
@@ -41,18 +43,22 @@ def flagsmith() -> FlagsmithAdmin:
 
 
 @pytest.fixture(scope="session")
-def adapter() -> Adapter:
-    adapter = Adapter(SDK_ADAPTER_URL)
-    adapter.wait_until_healthy()
-    return adapter
+def sdk(pytestconfig: pytest.Config) -> Iterator[SDK]:
+    if not SDK_COMMAND:
+        pytest.exit("Set SDK_COMMAND to the command that starts the SDK harness", returncode=4)
+    sdk = SDK(SDK_COMMAND)
+    implemented = [step for step in steps.ALL if step in sdk.implemented_steps]
+    # Write through the terminal reporter, so the line is shown even with output captured.
+    terminal = pytestconfig.pluginmanager.get_plugin("terminalreporter")
+    terminal.write_line(f"\nSDK implements {len(implemented)}/{len(steps.ALL)} steps")
+    yield sdk
+    sdk.close()
 
 
 @pytest.fixture
-def state(flagsmith: FlagsmithAdmin, adapter: Adapter) -> Iterator[ScenarioState]:
+def state(flagsmith: FlagsmithAdmin, sdk: SDK) -> Iterator[ScenarioState]:
     state = ScenarioState()
     yield state
-    if state.client_id:
-        adapter.delete_client(state.client_id)
     if state.environment:
         flagsmith.delete_project(state.environment)
 
@@ -80,8 +86,8 @@ def require_environment(state: ScenarioState) -> Environment:
 
 
 def require_client(state: ScenarioState) -> str:
-    assert state.client_id, "Scenario must create a client with 'an SDK client for the environment'"
-    return state.client_id
+    assert state.client, "Scenario must create a client with 'an SDK client for the environment'"
+    return state.client
 
 
 # Given
@@ -134,10 +140,12 @@ def segment_override(
 
 
 @given("an SDK client for the environment")
-def sdk_client(state: ScenarioState, adapter: Adapter) -> None:
-    state.client_id = adapter.create_client(
-        environment_key=require_environment(state).api_key,
-        api_url=f"{FLAGSMITH_SDK_URL.rstrip('/')}/api/v1/",
+def sdk_client(state: ScenarioState, sdk: SDK) -> None:
+    state.client = sdk.step(
+        steps.CREATE_CLIENT,
+        # Server-side SDKs authenticate with a server-side environment key.
+        [require_environment(state).server_side_key, f"{FLAGSMITH_SDK_URL.rstrip('/')}/api/v1/"],
+        returns_client=True,
     )
 
 
@@ -145,16 +153,18 @@ def sdk_client(state: ScenarioState, adapter: Adapter) -> None:
 
 
 @when("the application gets the environment flags")
-def get_environment_flags(state: ScenarioState, adapter: Adapter) -> None:
-    state.flags = adapter.environment_flags(require_client(state))
+def get_environment_flags(state: ScenarioState, sdk: SDK) -> None:
+    state.flags = sdk.step(steps.GET_ENVIRONMENT_FLAGS, [], client=require_client(state))
 
 
 @when(parsers.parse('the application gets the flags for identity "{identifier}" with traits:'))
 def get_identity_flags(
-    state: ScenarioState, adapter: Adapter, identifier: str, datatable: list[list[str]]
+    state: ScenarioState, sdk: SDK, identifier: str, datatable: list[list[str]]
 ) -> None:
-    state.flags = adapter.identity_flags(
-        require_client(state), identifier, table_traits(datatable)
+    state.flags = sdk.step(
+        steps.GET_IDENTITY_FLAGS,
+        [identifier, table_traits(datatable)],
+        client=require_client(state),
     )
 
 
@@ -169,7 +179,7 @@ def received_flags(state: ScenarioState, datatable: list[list[str]]) -> None:
         for row in table_rows(datatable)
     }
     actual = {
-        flag["featureName"]: {"enabled": flag["enabled"], "value": flag["value"]}
+        flag["feature"]: {"enabled": flag["enabled"], "value": flag["value"]}
         for flag in state.flags
     }
     assert actual == expected

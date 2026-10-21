@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Builds the harness together with an SDK's steps file:
+        dotnet publish Harness.csproj -p:StepsFile=<steps.cs> -p:SdkProject=<SDK .csproj>
+    -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <InvariantGlobalization>true</InvariantGlobalization>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="$(StepsFile)" />
+        <ProjectReference Include="$(SdkProject)" />
+    </ItemGroup>
+
+    <Target Name="CheckProperties" BeforeTargets="Restore;Build">
+        <Error Condition="'$(StepsFile)' == '' Or '$(SdkProject)' == ''" Text="Set -p:StepsFile=&lt;steps.cs&gt; and -p:SdkProject=&lt;SDK .csproj&gt;." />
+    </Target>
+
+</Project>
