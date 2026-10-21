@@ -1,6 +1,5 @@
 import json
 import os
-import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -44,13 +43,14 @@ def flagsmith() -> FlagsmithAdmin:
 
 
 @pytest.fixture(scope="session")
-def sdk() -> Iterator[SDK]:
+def sdk(pytestconfig: pytest.Config) -> Iterator[SDK]:
     if not SDK_COMMAND:
         pytest.exit("Set SDK_COMMAND to the command that starts the SDK harness", returncode=4)
     sdk = SDK(SDK_COMMAND)
     implemented = [step for step in steps.ALL if step in sdk.implemented_steps]
-    # Bypass output capturing, so the coverage line is always shown.
-    print(f"\nSDK implements {len(implemented)}/{len(steps.ALL)} steps", file=sys.__stderr__)
+    # Write through the terminal reporter, so the line is shown even with output captured.
+    terminal = pytestconfig.pluginmanager.get_plugin("terminalreporter")
+    terminal.write_line(f"\nSDK implements {len(implemented)}/{len(steps.ALL)} steps")
     yield sdk
     sdk.close()
 
