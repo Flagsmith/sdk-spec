@@ -55,9 +55,11 @@ COPY . .
 COPY --from=harness . /harness
 RUN dart pub get \
     && dart /harness/build.dart -o sdk-spec/harness_main.dart sdk-spec/steps.dart \
+    && mkdir /out \
     && dart compile exe sdk-spec/harness_main.dart -o /out/harness
 
 FROM scratch
+# The dart image provides /runtime/: the minimal files an AOT-compiled executable needs.
 COPY --from=build /runtime/ /
 COPY --from=build /out/harness /harness
 ENTRYPOINT ["/harness"]
