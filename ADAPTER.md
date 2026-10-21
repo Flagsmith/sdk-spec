@@ -15,6 +15,9 @@ code under test, not a published release.
 - Flag and trait values are JSON values (string, number, boolean or `null`) and must be passed through
   with their type intact. Do not stringify them.
 - If the SDK raises an error, respond with `500` and `{"error": "<message>"}`.
+- Respond with `404` to commands the adapter does not implement. The runner reports these as
+  "The SDK adapter does not implement …", so a scenario for a new command fails with a clear message
+  until the SDK implements it.
 
 ## Endpoints
 
@@ -31,11 +34,11 @@ running any scenarios.
 
 Create a new SDK client. Each scenario creates its own client.
 
-Request:
+Request (`environmentKey` is a server-side environment key):
 
 ```json
 {
-  "environmentKey": "test_environment_key",
+  "environmentKey": "ser.test_environment_key",
   "apiUrl": "http://localhost:41234/api/v1/"
 }
 ```

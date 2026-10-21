@@ -12,6 +12,7 @@ class Environment:
     project_id: int
     id: int
     api_key: str
+    server_side_key: str
     features: dict[str, int] = field(default_factory=dict)
     segments: dict[str, int] = field(default_factory=dict)
 
@@ -58,8 +59,16 @@ class FlagsmithAdmin:
         environment = self._request(
             "POST", "/environments/", {"name": "spec", "project": project["id"]}
         )
+        server_side_key = self._request(
+            "POST",
+            f"/environments/{environment['api_key']}/api-keys/",
+            {"name": "sdk-spec"},
+        )
         return Environment(
-            project_id=project["id"], id=environment["id"], api_key=environment["api_key"]
+            project_id=project["id"],
+            id=environment["id"],
+            api_key=environment["api_key"],
+            server_side_key=server_side_key["key"],
         )
 
     def delete_project(self, environment: Environment) -> None:

@@ -136,7 +136,8 @@ def segment_override(
 @given("an SDK client for the environment")
 def sdk_client(state: ScenarioState, adapter: Adapter) -> None:
     state.client_id = adapter.create_client(
-        environment_key=require_environment(state).api_key,
+        # Server-side SDKs authenticate with a server-side environment key.
+        environment_key=require_environment(state).server_side_key,
         api_url=f"{FLAGSMITH_SDK_URL.rstrip('/')}/api/v1/",
     )
 
