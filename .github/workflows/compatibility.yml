@@ -77,6 +77,11 @@ jobs:
             ref: feat/sdk-spec
             language: swift
             tags: ''
+          - name: android
+            repository: Flagsmith/flagsmith-kotlin-android-client
+            ref: feat/sdk-spec
+            language: kotlin
+            tags: ''
     uses: ./.github/workflows/run-spec.yml
     with:
       spec-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
