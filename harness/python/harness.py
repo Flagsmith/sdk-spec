@@ -12,7 +12,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-MARKER = re.compile(r"^\s*#+\s*(When .+?|Create the SDK client)\s*$")
+MARKER = re.compile(r"^\s*#+\s*(When .+?|Create the SDK client.*?)\s*$")
 FUNCTION = re.compile(r"^\s*(?:async\s+)?def\s+(\w+)")
 
 

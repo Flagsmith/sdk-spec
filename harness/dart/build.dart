@@ -8,7 +8,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-final _marker = RegExp(r'^\s*//+\s*(When .+?|Create the SDK client)\s*$');
+final _marker = RegExp(r'^\s*//+\s*(When .+?|Create the SDK client.*?)\s*$');
 // A top-level function declaration: an optional return type, then the name and its parameters.
 final _function = RegExp(
   r'^(?:[\w$][\w$<>?,.\[\] ]*\s)?([A-Za-z_$][\w$]*)\s*(?:<[^()]*>)?\s*\(',

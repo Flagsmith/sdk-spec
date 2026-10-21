@@ -34,3 +34,18 @@ services:
       postgres:
         condition: service_healthy
 
+  events:
+    # Flagsmith's events API, which the open-source image does not serve, recording what
+    # SDKs send so the runner can check it (see events-api/events_api.py).
+    image: docker.io/library/python:3.13-alpine
+    command: python /app/events_api.py
+    volumes:
+      - ./events-api/events_api.py:/app/events_api.py:ro
+    ports:
+      - ${EVENTS_PORT:-8001}:8000
+    healthcheck:
+      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://localhost:8000/health")']
+      interval: 2s
+      timeout: 2s
+      retries: 30
+

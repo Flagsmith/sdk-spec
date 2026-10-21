@@ -20,10 +20,12 @@ A harness runs an SDK's steps file for the spec runner. There is one per languag
 
 ## Finding steps
 
-- A step marker is a line comment holding either `Create the SDK client` or a step starting with
-  `When `, e.g. `When the application gets the environment flags`.
+- A step marker is a line comment starting with either `Create the SDK client` or `When `, e.g.
+  `When the application gets the environment flags`.
 - The marked function is the first function defined after the marker.
-- The marker text identifies the step, and must match the runner's text exactly.
+- The marker text identifies the step, and must match the runner's text exactly. A steps file has
+  one function per step, including the client-creating steps the runner asks for by name
+  (`Create the SDK client`, `Create the SDK client with events enabled`).
 
 Find steps at runtime where the language allows it. Otherwise, generate a dispatch table at build time
 inside the SDK's Docker build (Go does this, for example).

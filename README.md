@@ -7,6 +7,7 @@ executed against every SDK.
 - [`runner/`](runner) — executes the spec (pytest-bdd). Step definitions live here, written once for
   every SDK.
 - [`compose.yml`](compose.yml) — the Flagsmith API (pinned) the spec runs against.
+- [`events-api/`](events-api) — Flagsmith's events API, as far as the spec is concerned.
 - [`harness/`](harness) — one harness per language, running an SDK's steps file
   ([`HARNESS.md`](HARNESS.md)).
 - [`.github/workflows/run-spec.yml`](.github/workflows/run-spec.yml) — reusable workflow SDKs call.
@@ -20,9 +21,12 @@ executed against every SDK.
  │ runner │ ────────────────────────────────► │ Flagsmith │
  │        │                                   └───────────┘
  │        │  stdio  ┌──────────────────────────────┐  ▲
- │        │ ──────► │ harness ─► SDK steps file    │──┘ SDK API calls
- └────────┘         │ (SDK image, built from source)│
-                    └──────────────────────────────┘
+ │        │ ──────► │ harness ─► SDK steps file    │──┤ SDK API calls
+ │        │         │ (SDK image, built from source)│  │
+ │        │         └──────────────────────────────┘  │
+ │        │  read what the SDK sent  ┌────────────┐   │
+ └────────┘ ───────────────────────► │ events API │ ◄─┘
+                                     └────────────┘
 ```
 
 Each scenario gets its own Flagsmith project and environment, and the steps split three ways:
@@ -35,6 +39,11 @@ Each scenario gets its own Flagsmith project and environment, and the steps spli
 
 The feature files are therefore the whole contract: the `When` steps in `features/` are the steps
 SDKs implement. The runner creates the scenario's SDK client just before its first `When` step.
+
+SDKs send tracking and exposure events to Flagsmith's events API, which the open-source Flagsmith
+image does not serve. [`events-api/`](events-api) stands in for it: scenarios that say
+`Given the SDK sends events to Flagsmith` get a client pointed at it with events enabled, and the
+runner reads back what the SDK sent.
 
 ## Writing scenarios
 
@@ -81,6 +90,9 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
 
    - `Create the SDK client` receives a server-side environment key and the Flagsmith API URL, and
      returns a client created with default options.
+   - `Create the SDK client with events enabled` receives the same two, then the events API URL,
+     and returns a client that sends events there. Only `@events` scenarios use it, so an SDK
+     without event tracking can leave it out.
    - A `When` step receives the client, then the step's placeholders in order, then its data table.
      A `<key> | value` table arrives as a map, e.g. `{"plan": "premium", "age": 30}`.
    - Values are JSON values. Pass flag and trait values through with their types intact.
@@ -155,6 +167,11 @@ uv run pytest -v
 | `FLAGSMITH_SDK_URL` | `$FLAGSMITH_URL`        | Where the SDK reaches Flagsmith                 |
 | `FLAGSMITH_PORT`    | `8000`                  | Host port for Flagsmith (`compose.yml`)         |
 | `FLAGSMITH_IMAGE`   | pinned version          | Override the Flagsmith image (`compose.yml`)    |
+| `EVENTS_URL`        | `http://localhost:8001` | Where the runner reaches the events API         |
+| `EVENTS_SDK_URL`    | `http://events:8000`    | Where the SDK reaches the events API            |
+| `EVENTS_PORT`       | `8001`                  | Host port for the events API (`compose.yml`)    |
 
 `SDK_COMMAND` can be any command, so you can also run a harness straight against an SDK checkout,
 without Docker, e.g. `python ../harness/python/harness.py ../../flagsmith-python-client/sdk-spec/steps.py`.
+An SDK running on the host reaches the two services on the host's ports, so set
+`FLAGSMITH_SDK_URL=$FLAGSMITH_URL` and `EVENTS_SDK_URL=$EVENTS_URL` with it.

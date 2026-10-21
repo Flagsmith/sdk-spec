@@ -36,14 +36,14 @@ fn main() {
     fs::write(out, generate(&steps)).unwrap();
 }
 
-/// A step marker is a line comment holding `Create the SDK client` or a step starting with `When `.
+/// A step marker is a line comment starting with `Create the SDK client` or `When `.
 fn marker(line: &str) -> Option<&str> {
     let text = line
         .trim()
         .strip_prefix("//")?
         .trim_start_matches('/')
         .trim();
-    (text == "Create the SDK client" || text.starts_with("When ")).then_some(text)
+    (text.starts_with("Create the SDK client") || text.starts_with("When ")).then_some(text)
 }
 
 /// The name of the function defined on this line, e.g. `pub fn create_client(`.
@@ -150,7 +150,7 @@ fn generate(steps: &[Step]) -> String {
         if step.fallible {
             returned = format!("{returned}.map_err(error)?");
         }
-        // A step that does not use a client creates one: `Create the SDK client`.
+        // A step that does not use a client creates one: `Create the SDK client…`.
         let output = if step.client.is_some() {
             "returns_value"
         } else {

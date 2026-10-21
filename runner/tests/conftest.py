@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from pytest_bdd import given, parsers, then, when
 
+from sdk_spec.events_api import EventsAPI
 from sdk_spec.flagsmith_admin import Environment, FlagsmithAdmin
 from sdk_spec import sdk as sdk_module
 from sdk_spec.sdk import SDK
@@ -18,6 +19,11 @@ FLAGSMITH_URL = os.environ.get("FLAGSMITH_URL", "http://localhost:8000")
 # Where the SDK under test reaches Flagsmith. Differs from FLAGSMITH_URL when the
 # SDK runs on a different network, e.g. a container network.
 FLAGSMITH_SDK_URL = os.environ.get("FLAGSMITH_SDK_URL", FLAGSMITH_URL)
+# Where the runner reaches the events API, to read back what an SDK sent.
+EVENTS_URL = os.environ.get("EVENTS_URL", "http://localhost:8001")
+# Where the SDK under test reaches the events API. Unlike Flagsmith, which can be anywhere,
+# the events API is part of the spec's compose project, so it defaults to its service there.
+EVENTS_SDK_URL = os.environ.get("EVENTS_SDK_URL", "http://events:8000")
 # Starts the SDK's language harness, e.g. `docker run -i --rm sdk-spec-sdk`.
 SDK_COMMAND = os.environ.get("SDK_COMMAND", "")
 
@@ -25,6 +31,7 @@ SDK_COMMAND = os.environ.get("SDK_COMMAND", "")
 def pytest_report_header() -> list[str]:
     return [
         f"flagsmith: {FLAGSMITH_URL} (SDK uses {FLAGSMITH_SDK_URL})",
+        f"events: {EVENTS_URL} (SDK uses {EVENTS_SDK_URL})",
         f"sdk: {SDK_COMMAND}",
         f"missing steps: {sdk_module.MISSING_STEPS}",
     ]
@@ -48,6 +55,7 @@ def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter) -> None:
 class ScenarioState:
     environment: Environment | None = None
     client: str | None = None
+    events: bool = False
     result: Any = None
 
 
@@ -60,11 +68,18 @@ def flagsmith() -> FlagsmithAdmin:
 
 
 @pytest.fixture(scope="session")
+def events_api() -> EventsAPI:
+    events = EventsAPI(EVENTS_URL)
+    events.wait_until_healthy()
+    return events
+
+
+@pytest.fixture(scope="session")
 def sdk(pytestconfig: pytest.Config) -> Iterator[SDK]:
     if not SDK_COMMAND:
         pytest.exit("Set SDK_COMMAND to the command that starts the SDK harness", returncode=4)
     sdk = SDK(SDK_COMMAND)
-    required = [CREATE_CLIENT, *SDK_STEPS]
+    required = [CREATE_CLIENT, CREATE_CLIENT_WITH_EVENTS, *SDK_STEPS]
     implemented = [step for step in required if step in sdk.implemented_steps]
     # Write through the terminal reporter, so the line is shown even with output captured.
     terminal = pytestconfig.pluginmanager.get_plugin("terminalreporter")
@@ -119,6 +134,9 @@ def require_environment(state: ScenarioState) -> Environment:
 # others are JSON literals. Register SDK steps with `sdk_step`, never with `@when`.
 
 CREATE_CLIENT = "Create the SDK client"
+# A second client, for scenarios that are about the events an SDK sends. Events are off by
+# default in every SDK, and the spec's events API stands in for Flagsmith's.
+CREATE_CLIENT_WITH_EVENTS = "Create the SDK client with events enabled"
 SDK_STEPS: list[str] = []
 PLACEHOLDER = re.compile(r'("?)\{(\w+)\}\1')
 
@@ -126,10 +144,14 @@ PLACEHOLDER = re.compile(r'("?)\{(\w+)\}\1')
 def sdk_client(state: ScenarioState, sdk: SDK) -> str:
     """Creates the scenario's SDK client before its first SDK step, after all `Given` steps."""
     if state.client is None:
+        environment = require_environment(state)
+        # Server-side SDKs authenticate with a server-side environment key.
+        args = [environment.server_side_key, f"{FLAGSMITH_SDK_URL.rstrip('/')}/api/v1/"]
+        if state.events:
+            args.append(f"{EVENTS_SDK_URL.rstrip('/')}/")
         state.client = sdk.step(
-            CREATE_CLIENT,
-            # Server-side SDKs authenticate with a server-side environment key.
-            [require_environment(state).server_side_key, f"{FLAGSMITH_SDK_URL.rstrip('/')}/api/v1/"],
+            CREATE_CLIENT_WITH_EVENTS if state.events else CREATE_CLIENT,
+            args,
             returns_client=True,
         )
     return state.client
@@ -164,6 +186,18 @@ def sdk_step(pattern: str) -> None:
 
 sdk_step("the application gets the environment flags")
 sdk_step('the application gets the flags for identity "{identifier}" with traits:')
+sdk_step(
+    'the application gets the experiment flag "{feature}" for identity "{identifier}"'
+    " with traits:"
+)
+sdk_step(
+    'the application tracks event "{event}" for identity "{identifier}"'
+    " with value {value} and metadata:"
+)
+sdk_step(
+    'the application tracks an exposure of feature "{feature}" for identity "{identifier}"'
+    " with value {value} and metadata:"
+)
 
 
 # Given: the runner sets up Flagsmith
@@ -172,6 +206,13 @@ sdk_step('the application gets the flags for identity "{identifier}" with traits
 @given("a Flagsmith environment")
 def flagsmith_environment(state: ScenarioState, flagsmith: FlagsmithAdmin) -> None:
     state.environment = flagsmith.create_environment()
+
+
+@given("the SDK sends events to Flagsmith")
+def sdk_sends_events(state: ScenarioState) -> None:
+    """Asks for a client with events enabled, which the runner creates for the first SDK step."""
+    assert state.client is None, "The SDK client has already been created without events"
+    state.events = True
 
 
 @given("the environment has the following features:")
@@ -241,3 +282,42 @@ def persisted_traits(
 ) -> None:
     actual = flagsmith.get_identity_traits(require_environment(state), identifier)
     assert actual == table_traits(datatable)
+
+
+# Columns of an event table that name the field differently from the event itself.
+EVENT_FIELDS = {"feature": "feature_name"}
+# Columns of an event table holding a JSON value rather than a bare name.
+EVENT_VALUES = ("value", "traits", "metadata")
+
+
+def event_as_expected(event: dict[str, Any], expectation: dict[str, Any]) -> dict[str, Any]:
+    """The part of a received event its expectation names, in the expectation's terms."""
+    actual = {column: event.get(EVENT_FIELDS.get(column, column)) for column in expectation}
+    if "metadata" in expectation:
+        # SDKs add metadata of their own, such as the version they report themselves as.
+        received = actual["metadata"] or {}
+        actual["metadata"] = {key: received.get(key) for key in expectation["metadata"]}
+    return actual
+
+
+@then("Flagsmith has received the following events:")
+def received_events(
+    state: ScenarioState, events_api: EventsAPI, datatable: list[list[str]]
+) -> None:
+    """Checks the events the SDK sent, on the columns the table names."""
+    expected = [
+        {key: parse_value(value) if key in EVENT_VALUES else value for key, value in row.items()}
+        for row in table_rows(datatable)
+    ]
+    received = events_api.wait_for_events(
+        require_environment(state).server_side_key, len(expected)
+    )
+    assert len(received) == len(expected), f"Flagsmith received {received}"
+    for event, expectation in zip(received, expected):
+        assert event_as_expected(event, expectation) == expectation, f"Flagsmith received {event}"
+
+
+@then("Flagsmith has received no events")
+def received_no_events(state: ScenarioState, events_api: EventsAPI) -> None:
+    received = events_api.settle(require_environment(state).server_side_key)
+    assert received == [], f"Flagsmith received {received}"
