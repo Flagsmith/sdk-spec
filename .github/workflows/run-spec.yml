@@ -64,14 +64,14 @@ jobs:
       FLAGSMITH_IMAGE: ${{ inputs.flagsmith-image }}
     steps:
       - name: Check out SDK
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.sdk-repository || github.repository }}
           ref: ${{ inputs.sdk-ref }}
           path: sdk
 
       - name: Check out spec
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.spec-repository }}
           ref: ${{ inputs.spec-ref }}
@@ -90,7 +90,7 @@ jobs:
           [ -n "$FLAGSMITH_IMAGE" ] || unset FLAGSMITH_IMAGE
           docker compose up --detach --wait --wait-timeout 300
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.3.0
         with:
           working-directory: spec/runner
 
@@ -111,7 +111,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.results-name }}
           path: spec-results.xml
