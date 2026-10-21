@@ -14,6 +14,7 @@ A harness runs an SDK's steps file for the spec runner. There is one per languag
 | Python   | [`harness/python`](harness/python) |
 | Ruby     | [`harness/ruby`](harness/ruby)     |
 | Rust     | [`harness/rust`](harness/rust)     |
+| Swift    | [`harness/swift`](harness/swift)   |
 
 ## Finding steps
 

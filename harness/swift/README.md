@@ -4,10 +4,14 @@ Runs a Swift SDK's [steps file](../../README.md#onboarding-an-sdk) for the spec 
 [stdio protocol](../../HARNESS.md#protocol).
 
 Swift cannot call a function by name at runtime, so the harness compiles the steps file in. The
-`GenerateSteps` build tool plugin runs [`StepsGenerator`](Sources/StepsGenerator/main.swift) on the
-steps file, which finds each step marker and the first function after it and generates a table mapping
-the step text to that function. [`Sources/Harness`](Sources/Harness) speaks the protocol over stdin
-and stdout, decoding each JSON argument to the function's parameter type and encoding its result.
+`GenerateSteps` build tool plugin runs [`StepsGenerator`](StepsGenerator) on the steps file, which
+finds each step marker and the first function declared after it, skipping comments, and generates a
+table mapping the step text to that function. [`Sources/Harness`](Sources/Harness) speaks the protocol
+over stdin and stdout, decoding each JSON argument to the function's parameter type and encoding its
+result.
+
+`StepsGenerator` is a package of its own, so its tests run without an SDK:
+`swift test --package-path harness/swift/StepsGenerator`.
 
 ## The SDK's `sdk-spec/`
 

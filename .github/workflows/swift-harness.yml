@@ -1,0 +1,20 @@
+name: Swift harness
+
+on:
+  pull_request:
+    paths: ['harness/swift/**', '.github/workflows/swift-harness.yml']
+  push:
+    branches: [main]
+    paths: ['harness/swift/**', '.github/workflows/swift-harness.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test the steps generator
+    runs-on: ubuntu-latest
+    container: docker.io/library/swift:6.1-noble
+    steps:
+      - uses: actions/checkout@v7
+      - run: swift test --package-path harness/swift/StepsGenerator

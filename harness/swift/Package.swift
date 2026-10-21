@@ -11,6 +11,7 @@ let package = Package(
     dependencies: [
         // The SDK's steps package. The SDK must be checked out next to the harness, as `../sdk`.
         .package(path: "../sdk/sdk-spec"),
+        .package(path: "StepsGenerator"),
     ],
     targets: [
         .executableTarget(
@@ -18,7 +19,10 @@ let package = Package(
             dependencies: [.product(name: "SDKSpecSteps", package: "sdk-spec")],
             plugins: ["GenerateSteps"]
         ),
-        .executableTarget(name: "StepsGenerator"),
-        .plugin(name: "GenerateSteps", capability: .buildTool(), dependencies: ["StepsGenerator"]),
+        .plugin(
+            name: "GenerateSteps",
+            capability: .buildTool(),
+            dependencies: [.product(name: "StepsGenerator", package: "StepsGenerator")]
+        ),
     ]
 )
