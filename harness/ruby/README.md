@@ -1,7 +1,7 @@
 # Ruby harness
 
 Runs a Ruby SDK's `sdk-spec/steps.rb` under the spec. See [`HARNESS.md`](../../HARNESS.md) for the
-protocol and [`STEPS.md`](../../STEPS.md) for the steps.
+protocol and the [README](../../README.md#onboarding-an-sdk) for steps files.
 
 ## In an SDK's `sdk-spec/Dockerfile`
 

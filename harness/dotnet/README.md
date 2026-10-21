@@ -1,6 +1,6 @@
 # .NET (C#) harness
 
-Runs a C# [steps file](../../STEPS.md) under the spec. See [`HARNESS.md`](../../HARNESS.md) for the
+Runs a C# [steps file](../../README.md#onboarding-an-sdk) under the spec. See [`HARNESS.md`](../../HARNESS.md) for the
 protocol.
 
 `Harness.csproj` compiles the harness together with the SDK's steps file and a reference to the SDK

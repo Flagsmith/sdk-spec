@@ -14,7 +14,6 @@ Feature: Get identity flags with traits
       | max_items | true    | 10      |
     And a segment "premium_users" where trait "plan" equals "premium"
     And segment "premium_users" overrides feature "banner" with enabled true and value "hello premium user"
-    And an SDK client for the environment
     When the application gets the flags for identity "user_123" with traits:
       | trait    | value     |
       | plan     | "premium" |

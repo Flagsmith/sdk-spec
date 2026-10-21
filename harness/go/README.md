@@ -1,6 +1,6 @@
 # Go harness
 
-Runs a Go SDK's [steps file](../../STEPS.md) for the spec runner, over the
+Runs a Go SDK's [steps file](../../README.md#onboarding-an-sdk) for the spec runner, over the
 [stdio protocol](../../HARNESS.md#protocol).
 
 Go cannot call a function by name at runtime, so the harness is compiled for each steps file.

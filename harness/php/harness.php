@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace FlagsmithSdkSpec\Harness;
 
-const MARKER = '/^\s*(?:\/\/|#)\s*((?:Given|When|Then) .+?)\s*$/';
+const MARKER = '/^\s*(?:\/\/|#)\s*(When .+?|Create the SDK client)\s*$/';
 const FUNCTION_ = '/^\s*function\s+(\w+)\s*\(/';
 const NAMESPACE_ = '/^\s*namespace\s+([\w\\\\]+)\s*;/';
 

@@ -1,5 +1,7 @@
+import inspect
 import json
 import os
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -7,7 +9,6 @@ from typing import Any
 import pytest
 from pytest_bdd import given, parsers, then, when
 
-from sdk_spec import steps
 from sdk_spec.flagsmith_admin import Environment, FlagsmithAdmin
 from sdk_spec.sdk import SDK
 
@@ -31,7 +32,7 @@ def pytest_report_header() -> list[str]:
 class ScenarioState:
     environment: Environment | None = None
     client: str | None = None
-    flags: list[dict[str, Any]] | None = None
+    result: Any = None
 
 
 @pytest.fixture(scope="session")
@@ -47,10 +48,11 @@ def sdk(pytestconfig: pytest.Config) -> Iterator[SDK]:
     if not SDK_COMMAND:
         pytest.exit("Set SDK_COMMAND to the command that starts the SDK harness", returncode=4)
     sdk = SDK(SDK_COMMAND)
-    implemented = [step for step in steps.ALL if step in sdk.implemented_steps]
+    required = [CREATE_CLIENT, *SDK_STEPS]
+    implemented = [step for step in required if step in sdk.implemented_steps]
     # Write through the terminal reporter, so the line is shown even with output captured.
     terminal = pytestconfig.pluginmanager.get_plugin("terminalreporter")
-    terminal.write_line(f"\nSDK implements {len(implemented)}/{len(steps.ALL)} steps")
+    terminal.write_line(f"\nSDK implements {len(implemented)}/{len(required)} steps")
     yield sdk
     sdk.close()
 
@@ -80,17 +82,75 @@ def table_traits(datatable: list[list[str]]) -> dict[str, Any]:
     return {row["trait"]: parse_value(row["value"]) for row in table_rows(datatable)}
 
 
+def table_argument(datatable: list[list[str]]) -> Any:
+    """A `<key> | value` table becomes a map; any other table becomes a list of rows."""
+    header = datatable[0]
+    rows = table_rows(datatable)
+    if len(header) == 2 and header[1] == "value":
+        return {row[header[0]]: parse_value(row["value"]) for row in rows}
+    return [{key: parse_value(value) for key, value in row.items()} for row in rows]
+
+
 def require_environment(state: ScenarioState) -> Environment:
     assert state.environment, "Scenario must start with 'Given a Flagsmith environment'"
     return state.environment
 
 
-def require_client(state: ScenarioState) -> str:
-    assert state.client, "Scenario must create a client with 'an SDK client for the environment'"
+# SDK steps
+#
+# Every `When` step is an SDK step: the runner hands it to the SDK's steps file, passing the
+# step's placeholders in order, then its data table. Quoted placeholders ("{name}") are strings;
+# others are JSON literals. Register SDK steps with `sdk_step`, never with `@when`.
+
+CREATE_CLIENT = "Create the SDK client"
+SDK_STEPS: list[str] = []
+PLACEHOLDER = re.compile(r'("?)\{(\w+)\}\1')
+
+
+def sdk_client(state: ScenarioState, sdk: SDK) -> str:
+    """Creates the scenario's SDK client before its first SDK step, after all `Given` steps."""
+    if state.client is None:
+        state.client = sdk.step(
+            CREATE_CLIENT,
+            # Server-side SDKs authenticate with a server-side environment key.
+            [require_environment(state).server_side_key, f"{FLAGSMITH_SDK_URL.rstrip('/')}/api/v1/"],
+            returns_client=True,
+        )
     return state.client
 
 
-# Given
+def sdk_step(pattern: str) -> None:
+    """Registers `When <pattern>` as a step run by the SDK's steps file."""
+    placeholders = PLACEHOLDER.findall(pattern)
+    has_table = pattern.endswith(":")
+    text = f"When {pattern}"
+
+    def run(**kwargs: Any) -> None:
+        state: ScenarioState = kwargs["state"]
+        sdk: SDK = kwargs["sdk"]
+        args = [
+            kwargs[name] if quoted else parse_value(kwargs[name]) for quoted, name in placeholders
+        ]
+        if has_table:
+            args.append(table_argument(kwargs["datatable"]))
+        state.result = sdk.step(text, args, client=sdk_client(state, sdk))
+
+    parameters = ["state", "sdk", *(name for _, name in placeholders)]
+    if has_table:
+        parameters.append("datatable")
+    run.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+        [inspect.Parameter(name, inspect.Parameter.POSITIONAL_OR_KEYWORD) for name in parameters]
+    )
+    run.__name__ = re.sub(r"\W+", "_", pattern).strip("_")
+    when(parsers.parse(pattern), stacklevel=2)(run)
+    SDK_STEPS.append(text)
+
+
+sdk_step("the application gets the environment flags")
+sdk_step('the application gets the flags for identity "{identifier}" with traits:')
+
+
+# Given: the runner sets up Flagsmith
 
 
 @given("a Flagsmith environment")
@@ -139,48 +199,19 @@ def segment_override(
     )
 
 
-@given("an SDK client for the environment")
-def sdk_client(state: ScenarioState, sdk: SDK) -> None:
-    state.client = sdk.step(
-        steps.CREATE_CLIENT,
-        # Server-side SDKs authenticate with a server-side environment key.
-        [require_environment(state).server_side_key, f"{FLAGSMITH_SDK_URL.rstrip('/')}/api/v1/"],
-        returns_client=True,
-    )
-
-
-# When
-
-
-@when("the application gets the environment flags")
-def get_environment_flags(state: ScenarioState, sdk: SDK) -> None:
-    state.flags = sdk.step(steps.GET_ENVIRONMENT_FLAGS, [], client=require_client(state))
-
-
-@when(parsers.parse('the application gets the flags for identity "{identifier}" with traits:'))
-def get_identity_flags(
-    state: ScenarioState, sdk: SDK, identifier: str, datatable: list[list[str]]
-) -> None:
-    state.flags = sdk.step(
-        steps.GET_IDENTITY_FLAGS,
-        [identifier, table_traits(datatable)],
-        client=require_client(state),
-    )
-
-
-# Then
+# Then: the runner checks the outcome
 
 
 @then("the application receives the following flags:")
 def received_flags(state: ScenarioState, datatable: list[list[str]]) -> None:
-    assert state.flags is not None, "The application has not fetched any flags"
+    assert state.result is not None, "The application has not fetched any flags"
     expected = {
         row["feature"]: {"enabled": parse_value(row["enabled"]), "value": parse_value(row["value"])}
         for row in table_rows(datatable)
     }
     actual = {
         flag["feature"]: {"enabled": flag["enabled"], "value": flag["value"]}
-        for flag in state.flags
+        for flag in state.result
     }
     assert actual == expected
 

@@ -6,7 +6,7 @@
 
 require 'json'
 
-MARKER = /\A\s*#+\s*((?:Given|When|Then) .+?)\s*\z/
+MARKER = /\A\s*#+\s*(When .+?|Create the SDK client)\s*\z/
 FUNCTION = /\A\s*def\s+(?:self\.)?(\w+[?!]?)/
 
 # Loads the steps file and maps each marked step's text to the method defined after it.

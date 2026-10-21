@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-STEPS_DOCS_URL = "https://github.com/Flagsmith/sdk-spec/blob/main/STEPS.md"
+STEPS_DOCS_URL = "https://github.com/Flagsmith/sdk-spec/blob/main/README.md#onboarding-an-sdk"
 RESPONSE_TIMEOUT_SECONDS = 60
 
 
