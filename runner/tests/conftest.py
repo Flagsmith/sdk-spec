@@ -49,7 +49,8 @@ def sdk() -> Iterator[SDK]:
         pytest.exit("Set SDK_COMMAND to the command that starts the SDK harness", returncode=4)
     sdk = SDK(SDK_COMMAND)
     implemented = [step for step in steps.ALL if step in sdk.implemented_steps]
-    print(f"\nSDK implements {len(implemented)}/{len(steps.ALL)} steps", file=sys.stderr)
+    # Bypass output capturing, so the coverage line is always shown.
+    print(f"\nSDK implements {len(implemented)}/{len(steps.ALL)} steps", file=sys.__stderr__)
     yield sdk
     sdk.close()
 

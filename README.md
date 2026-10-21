@@ -7,8 +7,8 @@ executed against every SDK.
 - [`runner/`](runner) — executes the spec (pytest-bdd). Step definitions live here, written once for
   every SDK.
 - [`compose.yml`](compose.yml) — the Flagsmith API (pinned) the spec runs against.
-- [`STEPS.md`](STEPS.md) — how SDKs implement the spec: a short steps file in the SDK's language.
-- [`harness/`](harness) — one harness per language that runs an SDK's steps file
+- [`STEPS.md`](STEPS.md) — the steps every SDK implements.
+- [`harness/`](harness) — one harness per language, running an SDK's steps file
   ([`HARNESS.md`](HARNESS.md)).
 - [`.github/workflows/run-spec.yml`](.github/workflows/run-spec.yml) — reusable workflow SDKs call.
 - [`.github/workflows/compatibility.yml`](.github/workflows/compatibility.yml) — runs the spec
@@ -55,10 +55,22 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
 
 ## Onboarding an SDK
 
-1. Add `sdk-spec/steps.<ext>` and `sdk-spec/Dockerfile` as described in [`STEPS.md`](STEPS.md). If
-   there is no harness for the SDK's language yet, add one under `harness/` (see
-   [`HARNESS.md`](HARNESS.md)). See `flagsmith-python-client` for a reference.
-2. Add a workflow:
+1. Add `sdk-spec/steps.<ext>` to the SDK repository. Write one function per step in
+   [`STEPS.md`](STEPS.md), each directly below a comment holding the step's exact text:
+
+   ```python
+   # When the application gets the environment flags
+   def get_environment_flags(flagsmith):
+       return as_spec_flags(flagsmith.get_environment_flags())
+   ```
+
+   Keep it to SDK calls. The steps file doubles as a working, CI-checked usage example.
+
+2. Add `sdk-spec/Dockerfile`, which builds the SDK from source and runs the steps file under the
+   language's harness. See `harness/<language>/README.md`. If the language has no harness yet, add
+   one (see [`HARNESS.md`](HARNESS.md)).
+
+3. Add a workflow:
 
    ```yaml
    name: SDK spec
@@ -75,7 +87,7 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
          tags: core        # optional: select capabilities
    ```
 
-3. Let Renovate bump both refs together:
+4. Let Renovate bump both refs together:
 
    ```json
    {
@@ -94,7 +106,7 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
    }
    ```
 
-4. Add the SDK to the matrix in [`compatibility.yml`](.github/workflows/compatibility.yml).
+5. Add the SDK to the matrix in [`compatibility.yml`](.github/workflows/compatibility.yml).
 
 ## Running locally
 

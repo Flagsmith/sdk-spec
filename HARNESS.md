@@ -1,27 +1,37 @@
 # Language harnesses
 
-A harness runs an SDK's [steps file](STEPS.md) on behalf of the spec runner. There is one harness per
-language, in `harness/<language>/`. SDK repositories never contain harness code.
+A harness runs an SDK's steps file for the spec runner. There is one per language in
+`harness/<language>/`, and its `README.md` shows SDKs how to use it.
 
-| Language | Harness                                        | Run as                                          |
-| -------- | ---------------------------------------------- | ----------------------------------------------- |
-| Python   | [`harness/python`](harness/python/harness.py)  | `python /harness/harness.py sdk-spec/steps.py`  |
+| Language | Harness                            |
+| -------- | ---------------------------------- |
+| .NET     | [`harness/dotnet`](harness/dotnet) |
+| Elixir   | [`harness/elixir`](harness/elixir) |
+| Go       | [`harness/go`](harness/go)         |
+| Java     | [`harness/java`](harness/java)     |
+| Node.js  | [`harness/nodejs`](harness/nodejs) |
+| PHP      | [`harness/php`](harness/php)       |
+| Python   | [`harness/python`](harness/python) |
+| Ruby     | [`harness/ruby`](harness/ruby)     |
 
 ## Finding steps
 
-A step is marked by a line comment whose text starts with `Given `, `When ` or `Then `. The marked
-function is the first function defined after the comment. The comment text is the step's identity, and
-it must match the runner's step text exactly.
+- A step marker is a line comment whose text starts with `Given `, `When ` or `Then `.
+- The marked function is the first function defined after the marker.
+- The marker text identifies the step, and must match the text in [`STEPS.md`](STEPS.md) exactly.
 
-Harnesses for dynamic or reflective languages can find steps at runtime. Harnesses for other languages
-can generate a dispatch table at build time.
+Find steps at runtime where the language allows it. Otherwise, generate a dispatch table at build time
+inside the SDK's Docker build (Go does this, for example).
 
 ## Protocol
 
-The runner starts the harness, for example `docker run -i --rm <sdk image>`, and exchanges JSON
-messages with it, one per line, over stdin and stdout. Every request has an `id`, and the matching
-response repeats it. Any stdout line that is not a response is treated as SDK output and forwarded to
-the runner's stderr, so SDKs may log freely. Remember to flush stdout after each response.
+The runner starts the SDK image (`docker run -i --rm <image>`) and exchanges JSON messages with the
+harness over stdin and stdout, one per line. Each request has an `id`, and its response repeats it.
+
+- Flush stdout after each response.
+- Keep SDK output off stdout where you can: redirect it to stderr. The runner forwards any stdout line
+  that is not a response to its stderr, but it is safer not to rely on that.
+- Exit when stdin closes.
 
 ### `hello`
 
@@ -42,10 +52,16 @@ the runner's stderr, so SDKs may log freely. Remember to flush stdout after each
 {"id": 3, "result": [{"feature": "banner", "enabled": true, "value": "welcome"}]}
 ```
 
-- If `client` is set, pass the client stored under that handle as the first argument, followed by `args`.
-- If `returnsClient` is true, store the step's return value and respond with a new handle as `client`.
-  Otherwise respond with the return value, as JSON, under `result`.
-- If the step is not implemented, respond with `{"id": …, "missing": true}`.
-- If the step raises, respond with `{"id": …, "error": "<type>: <message>"}`.
+- **`client` is set:** pass the client stored under that handle as the first argument, then `args`.
+- **`returnsClient` is true:** store the return value and respond with a new handle as `client`.
+  Otherwise, respond with the return value under `result`.
+- **Step not implemented:** respond with `{"id": …, "missing": true}`.
+- **Step raises or returns an error:** respond with `{"id": …, "error": "<type>: <message>"}`.
 
-The harness exits when stdin closes.
+## Adding a harness
+
+Follow [`harness/python`](harness/python) as a reference. Add a `README.md` covering:
+
+- the SDK's `sdk-spec/Dockerfile`: what to `COPY --from=harness` and what to run;
+- the steps-file conventions for that language: function signatures and how to return errors;
+- how to run the harness locally without Docker.
