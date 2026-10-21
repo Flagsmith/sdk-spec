@@ -164,6 +164,7 @@ def sdk_step(pattern: str) -> None:
 
 sdk_step("the application gets the environment flags")
 sdk_step('the application gets the flags for identity "{identifier}" with traits:')
+sdk_step("the application calls testChange")
 
 
 # Given: the runner sets up Flagsmith
@@ -216,6 +217,11 @@ def segment_override(
 
 
 # Then: the runner checks the outcome
+
+
+@then(parsers.parse("the SDK returns {value}"))
+def returned_value(state: ScenarioState, value: str) -> None:
+    assert state.result == parse_value(value)
 
 
 @then("the application receives the following flags:")
