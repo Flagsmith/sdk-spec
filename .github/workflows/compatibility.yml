@@ -23,7 +23,8 @@ jobs:
         sdk:
           - name: python
             repository: Flagsmith/flagsmith-python-client
-            ref: main
+            # TODO: switch to main once the adapter is merged.
+            ref: feat/sdk-spec
             tags: ''
     uses: ./.github/workflows/run-spec.yml
     with:
