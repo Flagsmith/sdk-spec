@@ -1,9 +1,6 @@
 @events
 Feature: Get an experiment flag
-  An SDK resolves a feature for an identity and records the exposure, in one call, so that
-  an application can show a variant and have it measured. Only an identity enrolled in a
-  running experiment is exposed: every other evaluation is left out of the data, so that
-  an experiment's results count the identities it actually reached.
+  An SDK resolves a feature for an identity and records the exposure.
 
   Background:
     Given a Flagsmith environment

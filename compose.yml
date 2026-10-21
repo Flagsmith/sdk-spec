@@ -1,6 +1,15 @@
 # The Flagsmith API the spec runs against. The runner runs on the host and starts the
 # SDK under test in a container on this compose project's network (see README.md).
+#
+# The experimentation services mirror Flagsmith's own docker-compose.yml, so that `@events`
+# scenarios run against the real ingestion and delivery path: an SDK posts events to the
+# ingestion server, which writes them to Kafka, from where warehouse delivery inserts them
+# into the environment's warehouse. The spec provisions ClickHouse as that warehouse and
+# reads the events back out of it.
 name: sdk-spec
+
+volumes:
+  clickhouse-data:
 
 services:
   postgres:
@@ -16,13 +25,17 @@ services:
 
   flagsmith:
     # The Flagsmith version a spec release is verified against.
-    image: ${FLAGSMITH_IMAGE:-docker.io/flagsmith/flagsmith:2.276.0}
+    image: ${FLAGSMITH_IMAGE:-docker.io/flagsmith/flagsmith:2.287.0}
     command: migrate-and-serve
     environment:
       DATABASE_URL: postgresql://postgres:password@postgres:5432/flagsmith
       DJANGO_ALLOWED_HOSTS: '*'
       DJANGO_SECRET_KEY: sdk-spec
       ENVIRONMENT: test
+      EXPERIMENTATION_ENABLED: 'true'
+      # Encrypts the warehouse connection's credentials; warehouse delivery decrypts them
+      # with the same value.
+      WAREHOUSE_CREDENTIALS_SECRET: &warehouse-credentials-secret sdk-spec
     ports:
       - ${FLAGSMITH_PORT:-8000}:8000
     healthcheck:
@@ -34,18 +47,101 @@ services:
       postgres:
         condition: service_healthy
 
-  events:
-    # Flagsmith's events API, which the open-source image does not serve, recording what
-    # SDKs send so the runner can check it (see events-api/events_api.py).
-    image: docker.io/library/python:3.13-alpine
-    command: python /app/events_api.py
-    volumes:
-      - ./events-api/events_api.py:/app/events_api.py:ro
-    ports:
-      - ${EVENTS_PORT:-8001}:8000
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     healthcheck:
-      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://localhost:8000/health")']
-      interval: 2s
-      timeout: 2s
+      test: ['CMD-SHELL', '/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092']
+      interval: 5s
+      timeout: 10s
       retries: 30
 
+  kafka-init:
+    image: apache/kafka:3.9.1
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        for topic in flagsmith_warehouse_events external_warehouse_events external_warehouse_events_retry; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic $$topic
+        done
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # The environment's warehouse: where delivered events land and the runner reads them from.
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.12
+    environment:
+      CLICKHOUSE_USER: flagsmith
+      CLICKHOUSE_PASSWORD: password
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    ports:
+      - ${CLICKHOUSE_PORT:-8123}:8123
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:8123/ping']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  # Creates the events table, from the schema the pinned Flagsmith version ships.
+  clickhouse-init:
+    image: clickhouse/clickhouse-server:25.12
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        set -e
+        wget -qO /tmp/events.sql https://raw.githubusercontent.com/Flagsmith/flagsmith/v2.287.0/experimentation/clickhouse/events.sql
+        clickhouse-client --host clickhouse --user flagsmith --password password --multiquery < /tmp/events.sql
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+  # Flagsmith's events API: where SDKs send tracking and exposure events.
+  events:
+    image: flagsmith/events-ingestion-api:0.5.1
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_AUTH: none
+      KAFKA_TOPIC: flagsmith_warehouse_events
+      KAFKA_EXTERNAL_TOPIC: external_warehouse_events
+      DATABASE_URL: postgres://postgres:password@postgres:5432/flagsmith
+    ports:
+      - ${EVENTS_PORT:-8080}:8080
+    depends_on:
+      flagsmith:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
+  warehouse-delivery:
+    image: flagsmith/warehouse-delivery:0.4.0
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_AUTH: none
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/flagsmith
+      WAREHOUSE_CREDENTIALS_SECRET: *warehouse-credentials-secret
+      # The spec asserts on events as soon as they are sent, so deliver them promptly.
+      BATCH_MAX_WAIT_MS: 1000
+    depends_on:
+      flagsmith:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      clickhouse-init:
+        condition: service_completed_successfully

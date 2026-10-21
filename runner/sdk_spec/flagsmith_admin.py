@@ -74,6 +74,18 @@ class FlagsmithAdmin:
     def delete_project(self, environment: Environment) -> None:
         self._request("DELETE", f"/projects/{environment.project_id}/")
 
+    def connect_warehouse(self, environment: Environment, config: dict[str, Any]) -> None:
+        """Connects the environment to a warehouse, so that it can receive events.
+
+        Flagsmith's events API only accepts an environment that has one, and warehouse
+        delivery inserts the environment's events there for the runner to read.
+        """
+        self._request(
+            "POST",
+            f"/environments/{environment.api_key}/warehouse-connections/",
+            {"name": "sdk-spec", "warehouse_type": "clickhouse", **config},
+        )
+
     def create_feature(
         self, environment: Environment, name: str, enabled: bool, value: Any
     ) -> None:

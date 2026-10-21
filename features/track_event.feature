@@ -1,8 +1,6 @@
 @events
 Feature: Track an event
-  An SDK sends an application's tracking events to Flagsmith, so that an experiment can
-  measure what the identities it exposed went on to do. Values reach Flagsmith as text,
-  whatever type the application tracked them as.
+  An SDK sends an application's tracking events to Flagsmith.
 
   Background:
     Given a Flagsmith environment

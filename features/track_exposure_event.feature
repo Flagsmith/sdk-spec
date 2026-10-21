@@ -1,7 +1,6 @@
 @events
 Feature: Track an exposure event
-  An SDK records which variant of a feature an identity was shown, as the reserved
-  "$flag_exposure" event, so that an experiment can attribute later events to it.
+  An SDK records which variant of a feature an identity was shown, as a "$flag_exposure" event.
 
   Background:
     Given a Flagsmith environment
