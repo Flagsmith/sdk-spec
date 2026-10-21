@@ -20,12 +20,47 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # TODO: switch refs to main once the SDK spec PRs are merged.
         sdk:
           - name: python
             repository: Flagsmith/flagsmith-python-client
-            # TODO: switch to main once the SDK spec PR is merged.
             ref: feat/sdk-spec
             language: python
+            tags: ''
+          - name: nodejs
+            repository: Flagsmith/flagsmith-nodejs-client
+            ref: feat/sdk-spec
+            language: nodejs
+            tags: ''
+          - name: java
+            repository: Flagsmith/flagsmith-java-client
+            ref: feat/sdk-spec
+            language: java
+            tags: ''
+          - name: dotnet
+            repository: Flagsmith/flagsmith-dotnet-client
+            ref: feat/sdk-spec
+            language: dotnet
+            tags: ''
+          - name: go
+            repository: Flagsmith/flagsmith-go-client
+            ref: feat/sdk-spec
+            language: go
+            tags: ''
+          - name: ruby
+            repository: Flagsmith/flagsmith-ruby-client
+            ref: feat/sdk-spec
+            language: ruby
+            tags: ''
+          - name: php
+            repository: Flagsmith/flagsmith-php-client
+            ref: feat/sdk-spec
+            language: php
+            tags: ''
+          - name: rust
+            repository: Flagsmith/flagsmith-rust-client
+            ref: feat/sdk-spec
+            language: rust
             tags: ''
     uses: ./.github/workflows/run-spec.yml
     with:
