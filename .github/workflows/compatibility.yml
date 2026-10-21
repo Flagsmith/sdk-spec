@@ -20,51 +20,51 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO: switch refs to main once the SDK spec PRs are merged.
+        # SDKs whose spec PR is still open run their feat/sdk-spec branch.
         sdk:
           - name: python
             repository: Flagsmith/flagsmith-python-client
-            ref: feat/sdk-spec
+            ref: main
             language: python
             tags: ''
           - name: nodejs
             repository: Flagsmith/flagsmith-nodejs-client
-            ref: feat/sdk-spec
+            ref: main
             language: nodejs
             tags: ''
           - name: java
             repository: Flagsmith/flagsmith-java-client
-            ref: feat/sdk-spec
+            ref: main
             language: java
             tags: ''
           - name: dotnet
             repository: Flagsmith/flagsmith-dotnet-client
-            ref: feat/sdk-spec
+            ref: main
             language: dotnet
             tags: ''
           - name: go
             repository: Flagsmith/flagsmith-go-client
-            ref: feat/sdk-spec
+            ref: main
             language: go
             tags: ''
           - name: ruby
             repository: Flagsmith/flagsmith-ruby-client
-            ref: feat/sdk-spec
+            ref: main
             language: ruby
             tags: ''
           - name: php
             repository: Flagsmith/flagsmith-php-client
-            ref: feat/sdk-spec
+            ref: main
             language: php
             tags: ''
           - name: rust
             repository: Flagsmith/flagsmith-rust-client
-            ref: feat/sdk-spec
+            ref: main
             language: rust
             tags: ''
           - name: elixir
             repository: Flagsmith/flagsmith-elixir-client
-            ref: feat/sdk-spec
+            ref: main
             language: elixir
             tags: ''
           - name: js-client
