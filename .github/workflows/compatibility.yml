@@ -62,6 +62,11 @@ jobs:
             ref: feat/sdk-spec
             language: rust
             tags: ''
+          - name: elixir
+            repository: Flagsmith/flagsmith-elixir-client
+            ref: feat/sdk-spec
+            language: elixir
+            tags: ''
     uses: ./.github/workflows/run-spec.yml
     with:
       spec-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
