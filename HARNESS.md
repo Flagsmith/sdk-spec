@@ -9,6 +9,7 @@ A harness runs an SDK's steps file for the spec runner. There is one per languag
 | Elixir   | [`harness/elixir`](harness/elixir) |
 | Go       | [`harness/go`](harness/go)         |
 | Java     | [`harness/java`](harness/java)     |
+| Kotlin   | [`harness/kotlin`](harness/kotlin) |
 | Node.js  | [`harness/nodejs`](harness/nodejs) |
 | PHP      | [`harness/php`](harness/php)       |
 | Python   | [`harness/python`](harness/python) |
