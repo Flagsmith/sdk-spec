@@ -57,10 +57,6 @@ SDKs implement. The runner creates the scenario's SDK client just before its fir
 The spec is released as semver tags (`vX.Y.Z`). SDKs pin a tag, so spec changes never break an SDK
 until it opts in.
 
-- **Major** — changed behaviour, reworded `When` steps, or a changed harness protocol.
-- **Minor** — new scenarios, tags or `When` steps.
-- **Patch** — wording and runner fixes.
-
 Each release also pins the Flagsmith version in `compose.yml` that it was verified against.
 
 ## Onboarding an SDK
@@ -158,3 +154,16 @@ uv run pytest -v
 
 `SDK_COMMAND` can be any command, so you can also run a harness straight against an SDK checkout,
 without Docker, e.g. `python ../harness/python/harness.py ../../flagsmith-python-client/sdk-spec/steps.py`.
+
+## Implementing a new spec version
+
+A spec version is implemented in three phases:
+
+1. Spec update. A pull request to this repository is merged, and the new spec version is tagged (see [Versioning](#versioning)).
+2. Spec implementation. Renovate proposes the new version to every SDK onboarded in the
+   [compatibility matrix](.github/workflows/compatibility.yml), as a bump pull request in the SDK's
+   repository. A bump whose CI is red is fixed by implementing the spec in it. Fixed bumps are
+   reviewed by the SDK's code owners and merged.
+3. SDK releases. Each SDK releases a version that includes its merged bump.
+
+A spec version is implemented once every onboarded SDK has released the new spec version.
