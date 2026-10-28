@@ -251,6 +251,19 @@ def environment_features(
         )
 
 
+@given(
+    parsers.parse(
+        'a running experiment on feature "{feature}" serving variant "{variant}" with value {value}'
+    )
+)
+def running_experiment(
+    state: ScenarioState, flagsmith: FlagsmithAdmin, feature: str, variant: str, value: str
+) -> None:
+    flagsmith.start_experiment(
+        require_environment(state), feature, variant, parse_value(value)
+    )
+
+
 @given(parsers.parse('a segment "{segment}" where trait "{trait}" equals {value}'))
 def trait_segment(
     state: ScenarioState, flagsmith: FlagsmithAdmin, segment: str, trait: str, value: str

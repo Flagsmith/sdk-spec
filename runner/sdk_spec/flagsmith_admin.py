@@ -8,12 +8,18 @@ from sdk_spec.http import json_request, wait_until_ok
 
 
 @dataclass
+class Feature:
+    id: int
+    value: Any
+
+
+@dataclass
 class Environment:
     project_id: int
     id: int
     api_key: str
     server_side_key: str
-    features: dict[str, int] = field(default_factory=dict)
+    features: dict[str, Feature] = field(default_factory=dict)
     segments: dict[str, int] = field(default_factory=dict)
 
 
@@ -94,7 +100,51 @@ class FlagsmithAdmin:
             # Flagsmith infers the value type (string, integer or boolean) from `initial_value`.
             body["initial_value"] = value
         feature = self._request("POST", f"/projects/{environment.project_id}/features/", body)
-        environment.features[name] = feature["id"]
+        environment.features[name] = Feature(id=feature["id"], value=value)
+
+    def start_experiment(
+        self, environment: Environment, feature: str, variant: str, value: Any
+    ) -> None:
+        """Runs an experiment on the feature, serving `variant` to every identity.
+
+        A single variant at 100% keeps the scenario deterministic: every identity is
+        enrolled, and every one of them is served that variant.
+        """
+        control = environment.features[feature]
+        option = self._request(
+            "POST",
+            f"/projects/{environment.project_id}/features/{control.id}/mv-options/",
+            {
+                "feature": control.id,
+                "key": variant,
+                # The experiment's rollout sets the allocation this option is served at.
+                "default_percentage_allocation": 0,
+                **_typed_value(value),
+            },
+        )
+        experiment = self._request(
+            "POST",
+            f"/environments/{environment.api_key}/experiments/",
+            {
+                "feature": control.id,
+                "name": f"{feature} experiment",
+                "hypothesis": f"Serving {variant} changes what identities do",
+                "experiment_rollout": {
+                    "enabled": True,
+                    "rollout_percentage": 100,
+                    # What an enrolled identity is served when it is allocated no variant.
+                    "feature_state_value": _rollout_value(control.value),
+                    "multivariate_feature_state_values": [
+                        {"multivariate_feature_option": option["id"], "percentage_allocation": 100}
+                    ],
+                    # No segments: the experiment targets every identity in the environment.
+                    "audience": {"match": "any", "segment_ids": []},
+                },
+            },
+        )
+        self._request(
+            "POST", f"/environments/{environment.api_key}/experiments/{experiment['id']}/start/"
+        )
 
     def create_trait_segment(
         self, environment: Environment, name: str, trait: str, operator: str, value: Any
@@ -130,7 +180,7 @@ class FlagsmithAdmin:
         self._request(
             "POST",
             f"/environments/{environment.api_key}/features/"
-            f"{environment.features[feature]}/create-segment-override/",
+            f"{environment.features[feature].id}/create-segment-override/",
             {
                 "enabled": enabled,
                 "feature_state_value": _typed_value(value),
@@ -157,6 +207,15 @@ def _typed_value(value: Any) -> dict[str, Any]:
     if isinstance(value, int):
         return {"type": "int", "integer_value": value}
     return {"type": "unicode", "string_value": None if value is None else str(value)}
+
+
+def _rollout_value(value: Any) -> dict[str, Any]:
+    """An experiment rollout names the value's type differently, and sends it as text."""
+    if isinstance(value, bool):
+        return {"type": "boolean", "value": str(value).lower()}
+    if isinstance(value, int):
+        return {"type": "integer", "value": str(value)}
+    return {"type": "string", "value": "" if value is None else str(value)}
 
 
 def _trait_value(trait: dict[str, Any]) -> Any:
