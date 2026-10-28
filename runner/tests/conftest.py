@@ -152,7 +152,7 @@ def require_environment(state: ScenarioState) -> Environment:
 
 CREATE_CLIENT = "Create the SDK client"
 # A second client, for scenarios that are about the events an SDK sends. Events are off by
-# default in every SDK, and the spec's events API stands in for Flagsmith's.
+# default in every SDK, and the events API is not derived from the Flagsmith API URL.
 CREATE_CLIENT_WITH_EVENTS = "Create the SDK client with events enabled"
 SDK_STEPS: list[str] = []
 PLACEHOLDER = re.compile(r'("?)\{(\w+)\}\1')
