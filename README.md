@@ -159,11 +159,11 @@ without Docker, e.g. `python ../harness/python/harness.py ../../flagsmith-python
 
 A spec version is implemented in three phases:
 
-1. Spec update. A pull request to this repository is merged, and the new spec version is tagged (see [Versioning](#versioning)).
+1. Spec update. A pull request to this repository is merged, and the new spec version is tagged by a maintainer (see [Versioning](#versioning)).
 2. Spec implementation. Renovate proposes the new version to every SDK onboarded in the
    [compatibility matrix](.github/workflows/compatibility.yml), as a bump pull request in the SDK's
    repository. A bump whose CI is red is fixed by implementing the spec in it. Fixed bumps are
    reviewed by the SDK's code owners and merged.
-3. SDK releases. Each SDK releases a version that includes its merged bump.
+3. SDK releases. Maintainers release each SDK version that includes its merged bump.
 
 A spec version is implemented once every onboarded SDK has released the new spec version.
