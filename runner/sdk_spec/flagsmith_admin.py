@@ -188,6 +188,17 @@ class FlagsmithAdmin:
             },
         )
 
+    def create_flag_dependency(
+        self, environment: Environment, feature: str, prerequisite: str
+    ) -> None:
+        """Disables the feature in the environment unless the prerequisite is enabled."""
+        self._request(
+            "POST",
+            f"/environments/{environment.api_key}/features/"
+            f"{environment.features[feature].id}/dependencies/"
+            f"{environment.features[prerequisite].id}/",
+        )
+
     def get_identity_traits(self, environment: Environment, identifier: str) -> dict[str, Any]:
         identities = self._request(
             "GET", f"/environments/{environment.api_key}/identities/?q={identifier}"

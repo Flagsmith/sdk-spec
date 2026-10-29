@@ -67,6 +67,7 @@ class ScenarioState:
     environment: Environment | None = None
     client: str | None = None
     events: bool = False
+    local_evaluation: bool = False
     result: Any = None
 
 
@@ -96,7 +97,12 @@ def sdk(pytestconfig: pytest.Config) -> Iterator[SDK]:
     if not SDK_COMMAND:
         pytest.exit("Set SDK_COMMAND to the command that starts the SDK harness", returncode=4)
     sdk = SDK(SDK_COMMAND)
-    required = [CREATE_CLIENT, CREATE_CLIENT_WITH_EVENTS, *SDK_STEPS]
+    required = [
+        CREATE_CLIENT,
+        CREATE_CLIENT_WITH_EVENTS,
+        CREATE_CLIENT_WITH_LOCAL_EVALUATION,
+        *SDK_STEPS,
+    ]
     implemented = [step for step in required if step in sdk.implemented_steps]
     # Write through the terminal reporter, so the line is shown even with output captured.
     terminal = pytestconfig.pluginmanager.get_plugin("terminalreporter")
@@ -154,6 +160,8 @@ CREATE_CLIENT = "Create the SDK client"
 # A second client, for scenarios that are about the events an SDK sends. Events are off by
 # default in every SDK, and the events API is not derived from the Flagsmith API URL.
 CREATE_CLIENT_WITH_EVENTS = "Create the SDK client with events enabled"
+# A client evaluating flags against the environment document, for server-side SDKs only.
+CREATE_CLIENT_WITH_LOCAL_EVALUATION = "Create the SDK client with local evaluation"
 SDK_STEPS: list[str] = []
 PLACEHOLDER = re.compile(r'("?)\{(\w+)\}\1')
 
@@ -166,11 +174,12 @@ def sdk_client(state: ScenarioState, sdk: SDK) -> str:
         args = [environment.server_side_key, f"{FLAGSMITH_SDK_URL.rstrip('/')}/api/v1/"]
         if state.events:
             args.append(f"{EVENTS_SDK_URL.rstrip('/')}/")
-        state.client = sdk.step(
-            CREATE_CLIENT_WITH_EVENTS if state.events else CREATE_CLIENT,
-            args,
-            returns_client=True,
-        )
+            step = CREATE_CLIENT_WITH_EVENTS
+        elif state.local_evaluation:
+            step = CREATE_CLIENT_WITH_LOCAL_EVALUATION
+        else:
+            step = CREATE_CLIENT
+        state.client = sdk.step(step, args, returns_client=True)
     return state.client
 
 
@@ -237,6 +246,12 @@ def sdk_sends_events(state: ScenarioState, flagsmith: FlagsmithAdmin) -> None:
     state.events = True
 
 
+@given("the SDK evaluates flags locally")
+def sdk_evaluates_flags_locally(state: ScenarioState) -> None:
+    """Asks for a client with local evaluation, which the runner creates for the first SDK step."""
+    state.local_evaluation = True
+
+
 @given("the environment has the following features:")
 def environment_features(
     state: ScenarioState, flagsmith: FlagsmithAdmin, datatable: list[list[str]]
@@ -289,6 +304,13 @@ def segment_override(
     flagsmith.create_segment_override(
         require_environment(state), segment, feature, parse_value(enabled), parse_value(value)
     )
+
+
+@given(parsers.parse('feature "{feature}" depends on feature "{prerequisite}"'))
+def flag_dependency(
+    state: ScenarioState, flagsmith: FlagsmithAdmin, feature: str, prerequisite: str
+) -> None:
+    flagsmith.create_flag_dependency(require_environment(state), feature, prerequisite)
 
 
 # Then: the runner checks the outcome
