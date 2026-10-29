@@ -23,6 +23,25 @@ final class StepsTableTests: XCTestCase {
         ])
     }
 
+    func testFindsEveryClientCreatingMarker() {
+        let source = """
+        // Create the SDK client
+        public func createClient(environmentKey: String, apiUrl: String) -> Client {
+            Client(environmentKey: environmentKey, apiUrl: apiUrl)
+        }
+
+        // Create the SDK client with events enabled
+        public func createClientWithEvents(environmentKey: String, apiUrl: String, eventsApiUrl: String) -> Client {
+            Client(environmentKey: environmentKey, apiUrl: apiUrl, eventsApiUrl: eventsApiUrl)
+        }
+        """
+
+        XCTAssertEqual(findSteps(in: source), [
+            Step(text: "Create the SDK client", function: "createClient"),
+            Step(text: "Create the SDK client with events enabled", function: "createClientWithEvents"),
+        ])
+    }
+
     func testIgnoresFuncInDocumentationComments() {
         let source = """
         // When the application gets the environment flags

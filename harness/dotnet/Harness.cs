@@ -15,7 +15,7 @@ namespace SdkSpec.Harness;
 
 static partial class Program
 {
-    [GeneratedRegex(@"^\s*//+\s*(When .+?|Create the SDK client)\s*$")]
+    [GeneratedRegex(@"^\s*//+\s*(When .+?|Create the SDK client.*?)\s*$")]
     private static partial Regex Marker();
 
     // A static method declaration: modifiers including `static`, a return type, then the name.

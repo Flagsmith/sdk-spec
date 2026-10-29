@@ -66,7 +66,7 @@ result.
 
 - Step functions are `public`, top-level functions, each directly below its step marker comment
   (`// When …`). Give each a unique name: the table refers to them by name.
-- `When` steps take the client first. The `Create the SDK client` function takes no client and
+- `When` steps take the client first. A `Create the SDK client…` function takes no client and
   returns one. The client can be any type.
 - Other parameters take any `Decodable` type, e.g. `String` or `[String: V]` for a data table.
 - Return any `Encodable` type. Functions can be `async` and can `throw`. A thrown error is reported as

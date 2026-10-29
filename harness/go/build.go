@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	marker = regexp.MustCompile(`^//\s*(When .+?|Create the SDK client)\s*$`)
+	marker = regexp.MustCompile(`^//\s*(When .+?|Create the SDK client.*?)\s*$`)
 	module = regexp.MustCompile(`(?m)^module\s+(\S+)`)
 )
 
