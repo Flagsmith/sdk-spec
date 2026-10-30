@@ -10,6 +10,8 @@ executed against every SDK.
 - [`harness/`](harness) — one harness per language, running an SDK's steps file
   ([`HARNESS.md`](HARNESS.md)).
 - [`.github/workflows/run-spec.yml`](.github/workflows/run-spec.yml) — reusable workflow SDKs call.
+  [`.depot/workflows/run-spec.yml`](.depot/workflows/run-spec.yml) is an identical copy for SDKs on
+  Depot CI, which calls reusable workflows from `.depot/workflows/` only. Change both together.
 - [`.github/workflows/compatibility.yml`](.github/workflows/compatibility.yml) — runs the spec
   against every onboarded SDK on pull requests and nightly.
 
