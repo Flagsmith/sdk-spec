@@ -12,6 +12,7 @@ Feature: Get identity flags with traits
       | feature   | enabled | value   |
       | banner    | true    | "hello" |
       | max_items | true    | 10      |
+      | tagline   | true    | ""      |
     And a segment "premium_users" where trait "plan" equals "premium"
     And segment "premium_users" overrides feature "banner" with enabled true and value "hello premium user"
     When the application gets the flags for identity "user_123" with traits:
@@ -23,6 +24,7 @@ Feature: Get identity flags with traits
       | feature   | enabled | value                |
       | banner    | true    | "hello premium user" |
       | max_items | true    | 10                   |
+      | tagline   | true    | ""                   |
     And Flagsmith has identity "user_123" with the following traits:
       | trait    | value     |
       | plan     | "premium" |
