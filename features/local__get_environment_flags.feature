@@ -14,6 +14,7 @@ Feature: Get environment flags with local evaluation
       | checkout     | true    | "v2"  |
       | search       | true    | null  |
       | autocomplete | true    | 5     |
+      | tagline      | true    | ""    |
     And feature "checkout" depends on feature "payments"
     And feature "autocomplete" depends on feature "search"
     When the application gets the environment flags
@@ -23,6 +24,7 @@ Feature: Get environment flags with local evaluation
       | checkout     | false   | "v2"  |
       | search       | true    | null  |
       | autocomplete | true    | 5     |
+      | tagline      | true    | ""    |
 
   Scenario: Environment flags ignore segments that need an identity
     Given the environment has the following features:

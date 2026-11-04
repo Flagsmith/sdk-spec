@@ -13,6 +13,7 @@ Feature: Get environment flags
       | max_items | false   | 42        |
       | dark_mode | true    | true      |
       | beta      | true    | null      |
+      | tagline   | true    | ""        |
     When the application gets the environment flags
     Then the application receives the following flags:
       | feature   | enabled | value     |
@@ -20,3 +21,4 @@ Feature: Get environment flags
       | max_items | false   | 42        |
       | dark_mode | true    | true      |
       | beta      | true    | null      |
+      | tagline   | true    | ""        |
