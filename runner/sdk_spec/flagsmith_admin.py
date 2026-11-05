@@ -103,12 +103,18 @@ class FlagsmithAdmin:
         environment.features[name] = Feature(id=feature["id"], value=value)
 
     def start_experiment(
-        self, environment: Environment, feature: str, variant: str, value: Any
+        self,
+        environment: Environment,
+        feature: str,
+        variant: str,
+        value: Any,
+        rollout_percentage: int = 100,
     ) -> None:
-        """Runs an experiment on the feature, serving `variant` to every identity.
+        """Runs an experiment on the feature, serving `variant` to the identities it enrolls.
 
-        A single variant at 100% keeps the scenario deterministic: every identity is
-        enrolled, and every one of them is served that variant.
+        It enrolls `rollout_percentage` of identities. A rollout of 100% or 0%, with a single
+        variant at 100%, keeps the scenario deterministic: every identity is enrolled and served
+        that variant, or none is.
         """
         control = environment.features[feature]
         option = self._request(
@@ -131,7 +137,7 @@ class FlagsmithAdmin:
                 "hypothesis": f"Serving {variant} changes what identities do",
                 "experiment_rollout": {
                     "enabled": True,
-                    "rollout_percentage": 100,
+                    "rollout_percentage": rollout_percentage,
                     # What an enrolled identity is served when it is allocated no variant.
                     "feature_state_value": _rollout_value(control.value),
                     "multivariate_feature_state_values": [

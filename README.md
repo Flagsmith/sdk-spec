@@ -98,6 +98,9 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
    - `Create the SDK client with local evaluation` receives the same two as `Create the SDK client`,
      and returns a client that evaluates flags locally, with its environment already loaded. Only
      `@local-evaluation` scenarios use it, so an SDK without local evaluation can leave it out.
+   - `Create the SDK client with local evaluation and events enabled` receives the same three as
+     `Create the SDK client with events enabled`, and returns a client that does both. Only
+     scenarios tagged both `@local-evaluation` and `@events` use it.
    - A `When` step receives the client, then the step's placeholders in order, then its data table.
      A `<key> | value` table arrives as a map, e.g. `{"plan": "premium", "age": 30}`.
    - Values are JSON values. Pass flag and trait values through with their types intact.

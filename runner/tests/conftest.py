@@ -162,6 +162,10 @@ CREATE_CLIENT = "Create the SDK client"
 CREATE_CLIENT_WITH_EVENTS = "Create the SDK client with events enabled"
 # A client evaluating flags against the environment document, for server-side SDKs only.
 CREATE_CLIENT_WITH_LOCAL_EVALUATION = "Create the SDK client with local evaluation"
+# Both of the above, for scenarios about the events an SDK sends under local evaluation.
+CREATE_CLIENT_WITH_LOCAL_EVALUATION_AND_EVENTS = (
+    "Create the SDK client with local evaluation and events enabled"
+)
 SDK_STEPS: list[str] = []
 PLACEHOLDER = re.compile(r'("?)\{(\w+)\}\1')
 
@@ -174,7 +178,11 @@ def sdk_client(state: ScenarioState, sdk: SDK) -> str:
         args = [environment.server_side_key, f"{FLAGSMITH_SDK_URL.rstrip('/')}/api/v1/"]
         if state.events:
             args.append(f"{EVENTS_SDK_URL.rstrip('/')}/")
-            step = CREATE_CLIENT_WITH_EVENTS
+            step = (
+                CREATE_CLIENT_WITH_LOCAL_EVALUATION_AND_EVENTS
+                if state.local_evaluation
+                else CREATE_CLIENT_WITH_EVENTS
+            )
         elif state.local_evaluation:
             step = CREATE_CLIENT_WITH_LOCAL_EVALUATION
         else:
@@ -249,6 +257,7 @@ def sdk_sends_events(state: ScenarioState, flagsmith: FlagsmithAdmin) -> None:
 @given("the SDK evaluates flags locally")
 def sdk_evaluates_flags_locally(state: ScenarioState) -> None:
     """Asks for a client with local evaluation, which the runner creates for the first SDK step."""
+    assert state.client is None, "The SDK client has already been created without local evaluation"
     state.local_evaluation = True
 
 
@@ -267,15 +276,26 @@ def environment_features(
 
 
 @given(
-    parsers.parse(
-        'a running experiment on feature "{feature}" serving variant "{variant}" with value {value}'
+    parsers.re(
+        r'a running experiment on feature "(?P<feature>[^"]+)" serving variant "(?P<variant>[^"]+)"'
+        r" with value (?P<value>.+?)(?: to (?P<rollout>\d+)% of identities)?"
     )
 )
 def running_experiment(
-    state: ScenarioState, flagsmith: FlagsmithAdmin, feature: str, variant: str, value: str
+    state: ScenarioState,
+    flagsmith: FlagsmithAdmin,
+    feature: str,
+    variant: str,
+    value: str,
+    rollout: str | None,
 ) -> None:
+    """Runs an experiment on the feature, enrolling every identity unless a rollout is given."""
     flagsmith.start_experiment(
-        require_environment(state), feature, variant, parse_value(value)
+        require_environment(state),
+        feature,
+        variant,
+        parse_value(value),
+        100 if rollout is None else int(rollout),
     )
 
 
