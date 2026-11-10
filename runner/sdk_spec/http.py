@@ -4,6 +4,9 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+# How long a throttled request is retried for, as long as the server says when to retry.
+THROTTLED_TIMEOUT_SECONDS = 60
+
 
 class HTTPError(Exception):
     def __init__(self, method: str, url: str, status: int, body: str) -> None:
@@ -25,12 +28,22 @@ def json_request(
         method=method,
         headers={"Content-Type": "application/json", **(headers or {})},
     )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            raw = response.read()
-    except urllib.error.HTTPError as e:
-        raise HTTPError(method, url, e.code, e.read().decode(errors="replace")) from e
-    return json.loads(raw) if raw else None
+    deadline = time.monotonic() + THROTTLED_TIMEOUT_SECONDS
+    while True:
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read()
+            return json.loads(raw) if raw else None
+        except urllib.error.HTTPError as e:
+            retry_after = e.headers.get("Retry-After", "")
+            if (
+                e.code == 429
+                and retry_after.isdigit()
+                and time.monotonic() + int(retry_after) < deadline
+            ):
+                time.sleep(int(retry_after))
+                continue
+            raise HTTPError(method, url, e.code, e.read().decode(errors="replace")) from e
 
 
 def wait_until_ok(url: str, timeout_seconds: float, expect_json: bool = True) -> Any:
