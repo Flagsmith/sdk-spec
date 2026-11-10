@@ -24,11 +24,11 @@ Feature: Deliver events
       | key      | value |
       | currency | "GBP" |
     And the application flushes events
-    Then the SDK has sent the following requests to the events API:
-      | response             | events       |
-      | 503                  | ["checkout"] |
-      | "dropped connection" | ["checkout"] |
-      | "passed through"     | ["checkout"] |
+    Then the SDK has sent the following events to the events API:
+      | response             | event    |
+      | 503                  | checkout |
+      | "dropped connection" | checkout |
+      | "passed through"     | checkout |
     And Flagsmith has received the following events:
       | event    | identifier | value |
       | checkout | user_123   | "42"  |
@@ -42,10 +42,10 @@ Feature: Deliver events
       | currency | "GBP" |
     And the application flushes events
     Then the application waited less than 7 seconds
-    And the SDK has sent the following requests to the events API:
-      | response         | events       |
-      | "no response"    | ["checkout"] |
-      | "passed through" | ["checkout"] |
+    And the SDK has sent the following events to the events API:
+      | response         | event    |
+      | "no response"    | checkout |
+      | "passed through" | checkout |
     And Flagsmith has received the following events:
       | event    | identifier | value |
       | checkout | user_123   | "42"  |
@@ -64,12 +64,13 @@ Feature: Deliver events
       | key      | value |
       | currency | "GBP" |
     And the application flushes events
-    Then the SDK has sent the following requests to the events API:
-      | response         | events                      |
-      | 503              | ["add_to_cart"]             |
-      | 503              | ["add_to_cart"]             |
-      | 503              | ["add_to_cart"]             |
-      | "passed through" | ["add_to_cart", "checkout"] |
+    Then the SDK has sent the following events to the events API:
+      | response         | event       |
+      | 503              | add_to_cart |
+      | 503              | add_to_cart |
+      | 503              | add_to_cart |
+      | "passed through" | add_to_cart |
+      | "passed through" | checkout    |
     And Flagsmith has received the following events:
       | event       | identifier | value |
       | add_to_cart | user_123   | "1"   |
@@ -87,10 +88,10 @@ Feature: Deliver events
       | key      | value |
       | currency | "GBP" |
     And the application flushes events
-    Then the SDK has sent the following requests to the events API:
-      | response         | events          |
-      | 500              | ["add_to_cart"] |
-      | "passed through" | ["checkout"]    |
+    Then the SDK has sent the following events to the events API:
+      | response         | event       |
+      | 500              | add_to_cart |
+      | "passed through" | checkout    |
     And Flagsmith has received the following events:
       | event    | identifier | value |
       | checkout | user_123   | "42"  |
@@ -107,9 +108,9 @@ Feature: Deliver events
       | key      | value |
       | currency | "GBP" |
     And the application flushes events
-    Then the SDK has sent the following requests to the events API:
-      | response | events          |
-      | <status> | ["add_to_cart"] |
+    Then the SDK has sent the following events to the events API:
+      | response | event       |
+      | <status> | add_to_cart |
 
     Examples:
       | status |

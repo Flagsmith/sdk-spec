@@ -462,20 +462,22 @@ def received_events(
         assert event_as_expected(event, expectation) == expectation, f"Flagsmith received {event}"
 
 
-@then("the SDK has sent the following requests to the events API:")
-def sent_requests(
+@then("the SDK has sent the following events to the events API:")
+def sent_events(
     state: ScenarioState, fake_events: FakeEvents, datatable: list[list[str]]
 ) -> None:
-    """Checks every request the SDK sent, in order: the response it got, and the names of the
-    events it carried. A request the events API answered took the response "passed through".
+    """Checks every event the SDK sent, in the order it sent them, with the response the request
+    carrying each got. How events are grouped into requests is up to the SDK. A request the
+    events API answered took the response "passed through".
     """
     expected = [
-        {"response": parse_value(row["response"]), "events": parse_value(row["events"])}
+        {"response": parse_value(row["response"]), "event": row["event"]}
         for row in table_rows(datatable)
     ]
     actual = [
-        {"response": request["response"], "events": [e.get("event") for e in request["events"]]}
+        {"response": request["response"], "event": event.get("event")}
         for request in fake_events.requests(require_environment(state).server_side_key)
+        for event in request["events"]
     ]
     assert actual == expected
 

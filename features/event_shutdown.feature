@@ -18,10 +18,10 @@ Feature: Flush events and close the client
       | key      | value |
       | currency | "GBP" |
     And the application flushes events
-    Then the SDK has sent the following requests to the events API:
-      | response         | events       |
-      | 503              | ["checkout"] |
-      | "passed through" | ["checkout"] |
+    Then the SDK has sent the following events to the events API:
+      | response         | event    |
+      | 503              | checkout |
+      | "passed through" | checkout |
     And Flagsmith has received the following events:
       | event    | identifier | value |
       | checkout | user_123   | "42"  |
@@ -34,10 +34,10 @@ Feature: Flush events and close the client
       | key      | value |
       | currency | "GBP" |
     And the application closes the client with a timeout of 5 seconds
-    Then the SDK has sent the following requests to the events API:
-      | response         | events       |
-      | 503              | ["checkout"] |
-      | "passed through" | ["checkout"] |
+    Then the SDK has sent the following events to the events API:
+      | response         | event    |
+      | 503              | checkout |
+      | "passed through" | checkout |
     And Flagsmith has received the following events:
       | event    | identifier | value |
       | checkout | user_123   | "42"  |

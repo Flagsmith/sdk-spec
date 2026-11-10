@@ -60,7 +60,7 @@ the events API. The runner then reads the delivered events out of the warehouse.
 SDKs reach the events API through a fake in front of it, which passes their requests through. A
 scenario about delivering events despite failures sets up how the fake answers the SDK's next
 requests instead (`Given the events API responds to the next requests with:`), and checks the
-requests it received (`Then the SDK has sent the following requests to the events API:`).
+events it received (`Then the SDK has sent the following events to the events API:`).
 
 ## Writing scenarios
 
