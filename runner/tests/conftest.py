@@ -11,7 +11,7 @@ import pytest
 from pytest_bdd import given, parsers, then, when
 from pytest_bdd.parser import Scenario
 
-from sdk_spec.fake_events import FakeEvents
+from sdk_spec.events_test_proxy import EventsTestProxy
 from sdk_spec.flagsmith_admin import Environment, FlagsmithAdmin
 from sdk_spec import sdk as sdk_module
 from sdk_spec.sdk import SDK
@@ -22,11 +22,11 @@ FLAGSMITH_URL = os.environ.get("FLAGSMITH_URL", "http://localhost:8000")
 # Where the SDK under test reaches Flagsmith. Differs from FLAGSMITH_URL when the
 # SDK runs on a different network, e.g. a container network.
 FLAGSMITH_SDK_URL = os.environ.get("FLAGSMITH_SDK_URL", FLAGSMITH_URL)
-# Where the SDK under test reaches Flagsmith's events API, through the fake in front of it.
+# Where the SDK under test reaches Flagsmith's events API, through the proxy in front of it.
 # Unlike Flagsmith, which can be anywhere, it is part of the spec's compose project, so it
 # defaults to its service there.
-EVENTS_SDK_URL = os.environ.get("EVENTS_SDK_URL", "http://fake-events:8080")
-# Where the runner reaches that fake, to make it fail and to read the requests it received.
+EVENTS_SDK_URL = os.environ.get("EVENTS_SDK_URL", "http://events-test-proxy:8080")
+# Where the runner reaches that proxy, to make it fail and to read the requests it received.
 EVENTS_URL = os.environ.get("EVENTS_URL", "http://localhost:8080")
 # Where the runner reaches the warehouse the spec connects to its environments, to read
 # back the events delivered to it, and how Flagsmith and warehouse delivery reach it.
@@ -101,10 +101,10 @@ def warehouse() -> Warehouse:
 
 
 @pytest.fixture(scope="session")
-def fake_events() -> FakeEvents:
-    fake_events = FakeEvents(EVENTS_URL)
-    fake_events.wait_until_healthy()
-    return fake_events
+def events_test_proxy() -> EventsTestProxy:
+    proxy = EventsTestProxy(EVENTS_URL)
+    proxy.wait_until_healthy()
+    return proxy
 
 
 @pytest.fixture(scope="session")
@@ -297,7 +297,7 @@ def sdk_sends_events(state: ScenarioState, flagsmith: FlagsmithAdmin) -> None:
 
 @given("the events API responds to the next requests with:")
 def events_api_responses(
-    state: ScenarioState, fake_events: FakeEvents, datatable: list[list[str]]
+    state: ScenarioState, events_test_proxy: EventsTestProxy, datatable: list[list[str]]
 ) -> None:
     """Fails the SDK's next requests to the events API, in order; later ones pass through.
 
@@ -305,7 +305,7 @@ def events_api_responses(
     held until the SDK gives up on it.
     """
     assert state.events, "Scenario must say 'Given the SDK sends events to Flagsmith' first"
-    fake_events.respond(
+    events_test_proxy.respond(
         require_environment(state).server_side_key,
         [parse_value(row["response"]) for row in table_rows(datatable)],
     )
@@ -467,7 +467,7 @@ def received_events(
 
 @then("the SDK has sent the following events to the events API:")
 def sent_events(
-    state: ScenarioState, fake_events: FakeEvents, datatable: list[list[str]]
+    state: ScenarioState, events_test_proxy: EventsTestProxy, datatable: list[list[str]]
 ) -> None:
     """Checks every event the SDK sent, in the order it sent them, with the response the request
     carrying each got. How events are grouped into requests is up to the SDK. A request the
@@ -479,7 +479,7 @@ def sent_events(
     ]
     actual = [
         {"response": request["response"], "event": event.get("event")}
-        for request in fake_events.requests(require_environment(state).server_side_key)
+        for request in events_test_proxy.requests(require_environment(state).server_side_key)
         for event in request["events"]
     ]
     assert actual == expected

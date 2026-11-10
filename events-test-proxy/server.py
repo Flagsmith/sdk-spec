@@ -1,11 +1,11 @@
-"""A fake events API in front of Flagsmith's, for scenarios about how SDKs deliver events.
+"""A proxy in front of Flagsmith's events API, for scenarios about how SDKs deliver events.
 
 SDKs send events here. A request is passed through to the events API, unless the runner has
 set up responses for its environment key: each request then takes the next of them.
 
-- `POST /fake/environments/<key>/responses` with `{"responses": [...]}` appends responses,
+- `POST /test-proxy/environments/<key>/responses` with `{"responses": [...]}` appends responses,
   each a status code, `"dropped connection"` or `"no response"`.
-- `GET /fake/environments/<key>/requests` returns `{"requests": [...]}`, every request
+- `GET /test-proxy/environments/<key>/requests` returns `{"requests": [...]}`, every request
   received for the key in order, as `{"response": ..., "events": [...]}`. `response` is the
   one it took, or `"passed through"`.
 """
@@ -50,29 +50,29 @@ class Handler(BaseHTTPRequestHandler):
     def handle_request(self) -> None:
         body = self.read_body()
         parts = self.path.strip("/").split("/")
-        if parts == ["fake", "health"]:
+        if parts == ["test-proxy", "health"]:
             self.reply(200, {})
-        elif len(parts) == 4 and parts[:2] == ["fake", "environments"]:
+        elif len(parts) == 4 and parts[:2] == ["test-proxy", "environments"]:
             self.control(self.command, parts[2], parts[3], body)
         else:
-            self.fake(body)
+            self.proxy(body)
 
     def control(self, method: str, environment_key: str, resource: str, body: bytes) -> None:
         with lock:
             if (method, resource) == ("POST", "responses"):
                 new = json.loads(body)["responses"]
-                invalid = [r for r in new if not is_fake_response(r)]
+                invalid = [r for r in new if not is_injectable(r)]
                 if invalid:
-                    self.reply(400, {"detail": f"Cannot fake {invalid}"})
+                    self.reply(400, {"detail": f"Cannot respond with {invalid}"})
                     return
                 responses[environment_key].extend(new)
                 self.reply(204, None)
             elif (method, resource) == ("GET", "requests"):
                 self.reply(200, {"requests": requests[environment_key]})
             else:
-                self.reply(404, {"detail": f"No {method} /fake/environments/<key>/{resource}"})
+                self.reply(404, {"detail": f"No {method} /test-proxy/environments/<key>/{resource}"})
 
-    def fake(self, body: bytes) -> None:
+    def proxy(self, body: bytes) -> None:
         environment_key = self.headers.get(ENVIRONMENT_KEY_HEADER, "")
         with lock:
             queued = responses[environment_key]
@@ -86,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wait_for_sdk_to_give_up()
             self.drop_connection()
         else:
-            self.reply(response, {"detail": f"Fake {response} response"})
+            self.reply(response, {"detail": f"Test proxy {response} response"})
 
     def pass_through(self, body: bytes) -> None:
         upstream = urllib.request.Request(
@@ -150,7 +150,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(content)
 
 
-def is_fake_response(response: Any) -> bool:
+def is_injectable(response: Any) -> bool:
     if isinstance(response, int) and not isinstance(response, bool):
         return 100 <= response <= 599
     return response in (DROPPED_CONNECTION, NO_RESPONSE)

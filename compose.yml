@@ -5,7 +5,7 @@
 # scenarios run against the real ingestion and delivery path: an SDK posts events to the
 # ingestion server, which writes them to Kafka, from where warehouse delivery inserts them
 # into the environment's warehouse. The spec provisions ClickHouse as that warehouse and
-# reads the events back out of it. SDKs reach the ingestion server through `fake-events`,
+# reads the events back out of it. SDKs reach the ingestion server through `events-test-proxy`,
 # which scenarios about event delivery use to make it fail.
 name: sdk-spec
 
@@ -129,18 +129,18 @@ services:
         condition: service_completed_successfully
 
   # Where SDKs send events. Passes them through to the events API, unless a scenario sets
-  # up failing responses for its environment (see fake-events/server.py).
-  fake-events:
+  # up failing responses for its environment (see events-test-proxy/server.py).
+  events-test-proxy:
     image: python:3.15-alpine
-    command: python /fake-events/server.py
+    command: python /events-test-proxy/server.py
     environment:
       UPSTREAM_URL: http://events:8080
     volumes:
-      - ./fake-events:/fake-events:ro
+      - ./events-test-proxy:/events-test-proxy:ro
     ports:
       - ${EVENTS_PORT:-8080}:8080
     healthcheck:
-      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://localhost:8080/fake/health")']
+      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://localhost:8080/test-proxy/health")']
       interval: 2s
       timeout: 2s
       retries: 30
