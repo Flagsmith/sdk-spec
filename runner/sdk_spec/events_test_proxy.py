@@ -17,16 +17,16 @@ class EventsTestProxy:
     def wait_until_healthy(self, timeout_seconds: float = 60) -> None:
         wait_until_ok(f"{self.base_url}/test-proxy/health", timeout_seconds)
 
-    def respond(self, environment_key: str, responses: list[int | str]) -> None:
-        """Makes the next requests for the key take `responses`, in order, before passing through."""
+    def fail(self, environment_key: str, failures: list[int | str]) -> None:
+        """Fails the next requests for the key with `failures`, in order; later ones are forwarded."""
         json_request(
             "POST",
-            f"{self.base_url}/test-proxy/environments/{quote(environment_key)}/responses",
-            {"responses": responses},
+            f"{self.base_url}/test-proxy/environments/{quote(environment_key)}/failures",
+            {"failures": failures},
         )
 
     def requests(self, environment_key: str) -> list[dict[str, Any]]:
-        """Every request received for the key so far, oldest first, with the response it took."""
+        """Every request received for the key so far, oldest first, with the response it got."""
         return json_request(
             "GET", f"{self.base_url}/test-proxy/environments/{quote(environment_key)}/requests"
         )["requests"]

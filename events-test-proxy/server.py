@@ -1,13 +1,14 @@
 """A proxy in front of Flagsmith's events API, for scenarios about how SDKs deliver events.
 
-SDKs send events here. A request is passed through to the events API, unless the runner has
-set up responses for its environment key: each request then takes the next of them.
+SDKs send events here. A request is forwarded to the events API, unless the runner has set up
+failures for its environment key: each request then fails with the next of them.
 
-- `POST /test-proxy/environments/<key>/responses` with `{"responses": [...]}` appends responses,
-  each a status code, `"dropped connection"` or `"no response"`.
+- `POST /test-proxy/environments/<key>/failures` with `{"failures": [...]}` appends failures,
+  each a status code, `"ECONNRESET"` (the connection is reset) or `"ETIMEDOUT"` (the request is
+  held until the SDK gives up on it).
 - `GET /test-proxy/environments/<key>/requests` returns `{"requests": [...]}`, every request
   received for the key in order, as `{"response": ..., "events": [...]}`. `response` is the
-  one it took, or `"passed through"`.
+  failure it took, or the events API's status when it was forwarded.
 """
 
 import json
@@ -25,16 +26,15 @@ from typing import Any
 UPSTREAM_URL = os.environ.get("UPSTREAM_URL", "http://events:8080").rstrip("/")
 PORT = int(os.environ.get("PORT", "8080"))
 ENVIRONMENT_KEY_HEADER = "X-Environment-Key"
-DROPPED_CONNECTION = "dropped connection"
-NO_RESPONSE = "no response"
-PASSED_THROUGH = "passed through"
-# How long a request taking `"no response"` is held when the SDK never gives up on it.
+CONNECTION_RESET = "ECONNRESET"
+TIMED_OUT = "ETIMEDOUT"
+# How long a request failing with `ETIMEDOUT` is held when the SDK never gives up on it.
 MAX_HANG_SECONDS = 300
 # Not forwarded: they describe this connection, not the request.
 HOP_BY_HOP_HEADERS = {"connection", "content-length", "host", "keep-alive", "transfer-encoding"}
 
 lock = threading.Lock()
-responses: defaultdict[str, deque[int | str]] = defaultdict(deque)
+failures: defaultdict[str, deque[int | str]] = defaultdict(deque)
 requests: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
 
 
@@ -59,13 +59,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def control(self, method: str, environment_key: str, resource: str, body: bytes) -> None:
         with lock:
-            if (method, resource) == ("POST", "responses"):
-                new = json.loads(body)["responses"]
-                invalid = [r for r in new if not is_injectable(r)]
+            if (method, resource) == ("POST", "failures"):
+                new = json.loads(body)["failures"]
+                invalid = [f for f in new if not is_failure(f)]
                 if invalid:
-                    self.reply(400, {"detail": f"Cannot respond with {invalid}"})
+                    self.reply(400, {"detail": f"Cannot fail with {invalid}"})
                     return
-                responses[environment_key].extend(new)
+                failures[environment_key].extend(new)
                 self.reply(204, None)
             elif (method, resource) == ("GET", "requests"):
                 self.reply(200, {"requests": requests[environment_key]})
@@ -75,20 +75,24 @@ class Handler(BaseHTTPRequestHandler):
     def proxy(self, body: bytes) -> None:
         environment_key = self.headers.get(ENVIRONMENT_KEY_HEADER, "")
         with lock:
-            queued = responses[environment_key]
-            response = queued.popleft() if queued else PASSED_THROUGH
-            requests[environment_key].append({"response": response, "events": events_in(body)})
-        if response == PASSED_THROUGH:
-            self.pass_through(body)
-        elif response == DROPPED_CONNECTION:
+            queued = failures[environment_key]
+            failure = queued.popleft() if queued else None
+            request = {"response": failure, "events": events_in(body)}
+            requests[environment_key].append(request)
+        if failure is None:
+            status = self.forward(body)
+            with lock:
+                request["response"] = status
+        elif failure == CONNECTION_RESET:
             self.drop_connection()
-        elif response == NO_RESPONSE:
+        elif failure == TIMED_OUT:
             self.wait_for_sdk_to_give_up()
             self.drop_connection()
         else:
-            self.reply(response, {"detail": f"Test proxy {response} response"})
+            self.reply(failure, {"detail": f"Test proxy {failure} response"})
 
-    def pass_through(self, body: bytes) -> None:
+    def forward(self, body: bytes) -> int:
+        """Sends the request on to the events API, and its response back. Returns its status."""
         upstream = urllib.request.Request(
             f"{UPSTREAM_URL}{self.path}",
             data=body if self.command == "POST" else None,
@@ -104,6 +108,9 @@ class Handler(BaseHTTPRequestHandler):
                 status, headers, content = response.status, response.headers, response.read()
         except urllib.error.HTTPError as e:
             status, headers, content = e.code, e.headers, e.read()
+        except OSError as e:
+            self.reply(502, {"detail": f"Events API unreachable: {e}"})
+            return 502
         self.send_response(status)
         for name, value in headers.items():
             if name.lower() not in HOP_BY_HOP_HEADERS:
@@ -111,6 +118,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
         self.wfile.write(content)
+        return status
 
     def wait_for_sdk_to_give_up(self) -> None:
         """Returns once the SDK closes the connection, as it does when its request times out."""
@@ -150,10 +158,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(content)
 
 
-def is_injectable(response: Any) -> bool:
-    if isinstance(response, int) and not isinstance(response, bool):
-        return 100 <= response <= 599
-    return response in (DROPPED_CONNECTION, NO_RESPONSE)
+def is_failure(failure: Any) -> bool:
+    if isinstance(failure, int) and not isinstance(failure, bool):
+        return 400 <= failure <= 599
+    return failure in (CONNECTION_RESET, TIMED_OUT)
 
 
 def events_in(body: bytes) -> list[Any]:

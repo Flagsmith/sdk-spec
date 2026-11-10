@@ -59,7 +59,7 @@ the events API. The runner then reads the delivered events out of the warehouse.
 
 SDKs reach the events API through a proxy in front of it.
 A scenario about delivering events despite failures sets up how the proxy answers the SDK's next
-requests instead (`Given the events API responds to the next requests with:`), and checks the
+requests instead (`Given the events API fails the next requests with:`), and checks the
 events it received (`Then the SDK has sent the following events to the events API:`).
 
 ## Writing scenarios

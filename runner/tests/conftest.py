@@ -295,19 +295,33 @@ def sdk_sends_events(state: ScenarioState, flagsmith: FlagsmithAdmin) -> None:
     state.events = True
 
 
-@given("the events API responds to the next requests with:")
-def events_api_responses(
+# Failures of a request to the events API, named after the error the SDK gets.
+CONNECTION_RESET = "ECONNRESET"
+TIMED_OUT = "ETIMEDOUT"
+
+
+def parse_response(raw: str) -> int | str:
+    """A response to a request: an HTTP status code, ECONNRESET or ETIMEDOUT."""
+    if raw.isdigit():
+        return int(raw)
+    if raw in (CONNECTION_RESET, TIMED_OUT):
+        return raw
+    raise ValueError(f"{raw!r} is not a status code, {CONNECTION_RESET} or {TIMED_OUT}")
+
+
+@given("the events API fails the next requests with:")
+def events_api_failures(
     state: ScenarioState, events_test_proxy: EventsTestProxy, datatable: list[list[str]]
 ) -> None:
-    """Fails the SDK's next requests to the events API, in order; later ones pass through.
+    """Fails the SDK's next requests to the events API, in order; later ones reach it.
 
-    A response is a status code, "dropped connection", or "no response": the request is
-    held until the SDK gives up on it.
+    A failure is a status code, ECONNRESET (the connection is reset), or ETIMEDOUT (the request
+    goes unanswered until the SDK gives up on it).
     """
     assert state.events, "Scenario must say 'Given the SDK sends events to Flagsmith' first"
-    events_test_proxy.respond(
+    events_test_proxy.fail(
         require_environment(state).server_side_key,
-        [parse_value(row["response"]) for row in table_rows(datatable)],
+        [parse_response(row["failure"]) for row in table_rows(datatable)],
     )
 
 
@@ -470,11 +484,11 @@ def sent_events(
     state: ScenarioState, events_test_proxy: EventsTestProxy, datatable: list[list[str]]
 ) -> None:
     """Checks every event the SDK sent, in the order it sent them, with the response the request
-    carrying each got. How events are grouped into requests is up to the SDK. A request the
-    events API answered took the response "passed through".
+    carrying each got: a failure it was given, or the events API's status code. How events are
+    grouped into requests is up to the SDK.
     """
     expected = [
-        {"response": parse_value(row["response"]), "event": row["event"]}
+        {"response": parse_response(row["response"]), "event": row["event"]}
         for row in table_rows(datatable)
     ]
     actual = [
