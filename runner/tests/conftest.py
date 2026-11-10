@@ -2,6 +2,7 @@ import inspect
 import json
 import os
 import re
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 import pytest
 from pytest_bdd import given, parsers, then, when
 
+from sdk_spec.fake_events import FakeEvents
 from sdk_spec.flagsmith_admin import Environment, FlagsmithAdmin
 from sdk_spec import sdk as sdk_module
 from sdk_spec.sdk import SDK
@@ -19,9 +21,12 @@ FLAGSMITH_URL = os.environ.get("FLAGSMITH_URL", "http://localhost:8000")
 # Where the SDK under test reaches Flagsmith. Differs from FLAGSMITH_URL when the
 # SDK runs on a different network, e.g. a container network.
 FLAGSMITH_SDK_URL = os.environ.get("FLAGSMITH_SDK_URL", FLAGSMITH_URL)
-# Where the SDK under test reaches Flagsmith's events API. Unlike Flagsmith, which can be
-# anywhere, it is part of the spec's compose project, so it defaults to its service there.
-EVENTS_SDK_URL = os.environ.get("EVENTS_SDK_URL", "http://events:8080")
+# Where the SDK under test reaches Flagsmith's events API, through the fake in front of it.
+# Unlike Flagsmith, which can be anywhere, it is part of the spec's compose project, so it
+# defaults to its service there.
+EVENTS_SDK_URL = os.environ.get("EVENTS_SDK_URL", "http://fake-events:8080")
+# Where the runner reaches that fake, to make it fail and to read the requests it received.
+EVENTS_URL = os.environ.get("EVENTS_URL", "http://localhost:8080")
 # Where the runner reaches the warehouse the spec connects to its environments, to read
 # back the events delivered to it, and how Flagsmith and warehouse delivery reach it.
 WAREHOUSE_URL = os.environ.get("WAREHOUSE_URL", "http://localhost:8123")
@@ -42,7 +47,7 @@ SDK_COMMAND = os.environ.get("SDK_COMMAND", "")
 def pytest_report_header() -> list[str]:
     return [
         f"flagsmith: {FLAGSMITH_URL} (SDK uses {FLAGSMITH_SDK_URL})",
-        f"events: {EVENTS_SDK_URL} (SDK), warehouse: {WAREHOUSE_URL} (runner)",
+        f"events: {EVENTS_SDK_URL} (SDK), {EVENTS_URL} (runner), warehouse: {WAREHOUSE_URL}",
         f"sdk: {SDK_COMMAND}",
         f"missing steps: {sdk_module.MISSING_STEPS}",
     ]
@@ -70,6 +75,7 @@ class ScenarioState:
     local_evaluation: bool = False
     experiment_id: int | None = None
     result: Any = None
+    elapsed_seconds: float | None = None
 
 
 @pytest.fixture(scope="session")
@@ -91,6 +97,13 @@ def warehouse() -> Warehouse:
     )
     warehouse.wait_until_healthy()
     return warehouse
+
+
+@pytest.fixture(scope="session")
+def fake_events() -> FakeEvents:
+    fake_events = FakeEvents(EVENTS_URL)
+    fake_events.wait_until_healthy()
+    return fake_events
 
 
 @pytest.fixture(scope="session")
@@ -206,7 +219,10 @@ def sdk_step(pattern: str) -> None:
         ]
         if has_table:
             args.append(table_argument(kwargs["datatable"]))
-        state.result = sdk.step(text, args, client=sdk_client(state, sdk))
+        client = sdk_client(state, sdk)
+        started = time.monotonic()
+        state.result = sdk.step(text, args, client=client)
+        state.elapsed_seconds = time.monotonic() - started
 
     parameters = ["state", "sdk", *(name for _, name in placeholders)]
     if has_table:
@@ -233,6 +249,8 @@ sdk_step(
     'the application tracks an exposure of feature "{feature}" for identity "{identifier}"'
     " with value {value} and metadata:"
 )
+sdk_step("the application flushes events")
+sdk_step("the application closes the client with a timeout of {timeout} seconds")
 
 
 # Given: the runner sets up Flagsmith
@@ -253,6 +271,22 @@ def sdk_sends_events(state: ScenarioState, flagsmith: FlagsmithAdmin) -> None:
     assert state.client is None, "The SDK client has already been created without events"
     flagsmith.connect_warehouse(require_environment(state), WAREHOUSE_CONFIG)
     state.events = True
+
+
+@given("the events API responds to the next requests with:")
+def events_api_responses(
+    state: ScenarioState, fake_events: FakeEvents, datatable: list[list[str]]
+) -> None:
+    """Fails the SDK's next requests to the events API, in order; later ones pass through.
+
+    A response is a status code, "dropped connection", or "no response": the request is
+    held until the SDK gives up on it.
+    """
+    assert state.events, "Scenario must say 'Given the SDK sends events to Flagsmith' first"
+    fake_events.respond(
+        require_environment(state).server_side_key,
+        [parse_value(row["response"]) for row in table_rows(datatable)],
+    )
 
 
 @given("the SDK evaluates flags locally")
@@ -407,6 +441,33 @@ def received_events(
     assert len(delivered) == len(expected), f"Flagsmith received {delivered}"
     for event, expectation in zip(delivered, expected):
         assert event_as_expected(event, expectation) == expectation, f"Flagsmith received {event}"
+
+
+@then("the SDK has sent the following requests to the events API:")
+def sent_requests(
+    state: ScenarioState, fake_events: FakeEvents, datatable: list[list[str]]
+) -> None:
+    """Checks every request the SDK sent, in order: the response it got, and the names of the
+    events it carried. A request the events API answered took the response "passed through".
+    """
+    expected = [
+        {"response": parse_value(row["response"]), "events": parse_value(row["events"])}
+        for row in table_rows(datatable)
+    ]
+    actual = [
+        {"response": request["response"], "events": [e.get("event") for e in request["events"]]}
+        for request in fake_events.requests(require_environment(state).server_side_key)
+    ]
+    assert actual == expected
+
+
+@then(parsers.parse("the application waited less than {seconds} seconds"))
+def waited_less_than(state: ScenarioState, seconds: str) -> None:
+    """Checks how long the last SDK step took to return."""
+    assert state.elapsed_seconds is not None, "The application has not used the SDK"
+    assert state.elapsed_seconds < parse_value(seconds), (
+        f"The application waited {state.elapsed_seconds:.1f} seconds"
+    )
 
 
 @then("Flagsmith has received no events")

@@ -5,7 +5,8 @@
 # scenarios run against the real ingestion and delivery path: an SDK posts events to the
 # ingestion server, which writes them to Kafka, from where warehouse delivery inserts them
 # into the environment's warehouse. The spec provisions ClickHouse as that warehouse and
-# reads the events back out of it.
+# reads the events back out of it. SDKs reach the ingestion server through `fake-events`,
+# which scenarios about event delivery use to make it fail.
 name: sdk-spec
 
 volumes:
@@ -112,7 +113,7 @@ services:
       clickhouse:
         condition: service_healthy
 
-  # Flagsmith's events API: where SDKs send tracking and exposure events.
+  # Flagsmith's events API: where SDKs' tracking and exposure events end up.
   events:
     image: flagsmith/events-ingestion-api:0.5.1
     environment:
@@ -121,13 +122,31 @@ services:
       KAFKA_TOPIC: flagsmith_warehouse_events
       KAFKA_EXTERNAL_TOPIC: external_warehouse_events
       DATABASE_URL: postgres://postgres:password@postgres:5432/flagsmith
-    ports:
-      - ${EVENTS_PORT:-8080}:8080
     depends_on:
       flagsmith:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+
+  # Where SDKs send events. Passes them through to the events API, unless a scenario sets
+  # up failing responses for its environment (see fake-events/server.py).
+  fake-events:
+    image: python:3.15-alpine
+    command: python /fake-events/server.py
+    environment:
+      UPSTREAM_URL: http://events:8080
+    volumes:
+      - ./fake-events:/fake-events:ro
+    ports:
+      - ${EVENTS_PORT:-8080}:8080
+    healthcheck:
+      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://localhost:8080/fake/health")']
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    depends_on:
+      events:
+        condition: service_started
 
   warehouse-delivery:
     image: flagsmith/warehouse-delivery:0.4.0
