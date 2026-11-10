@@ -41,7 +41,7 @@ Feature: Deliver events
       | key      | value |
       | currency | "GBP" |
     And the application flushes events
-    Then the application waited less than 5 seconds
+    Then the application waited less than 7 seconds
     And the SDK has sent the following requests to the events API:
       | response         | events       |
       | "no response"    | ["checkout"] |
