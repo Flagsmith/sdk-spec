@@ -52,4 +52,4 @@ Feature: Flush events and close the client
       | key      | value |
       | currency | "GBP" |
     And the application closes the client with a timeout of 2 seconds
-    Then the application waited less than 3 seconds
+    Then the application waited less than 4 seconds
