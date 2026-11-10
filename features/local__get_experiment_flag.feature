@@ -12,7 +12,7 @@ Feature: Get an experiment flag with local evaluation
     Given the environment has the following features:
       | feature  | enabled | value     |
       | checkout | true    | "control" |
-    And a running experiment on feature "checkout" serving variant "treatment" with value "new checkout"
+    And a running experiment on feature "checkout" enrolling 100% of identities, serving variant "treatment" with value "new checkout" to 100% of them
     When the application gets the experiment flag "checkout" for identity "user_123" with traits:
       | trait | value     |
       | plan  | "premium" |
@@ -20,14 +20,29 @@ Feature: Get an experiment flag with local evaluation
       | feature  | enabled | value          |
       | checkout | true    | "new checkout" |
     And Flagsmith has received the following events:
-      | event          | feature  | identifier | value       | traits              |
-      | $flag_exposure | checkout | user_123   | "treatment" | {"plan": "premium"} |
+      | event          | feature  | identifier | value       | traits              | metadata                          |
+      | $flag_exposure | checkout | user_123   | "treatment" | {"plan": "premium"} | {"experiment_id": "<experiment>"} |
+
+  Scenario: An identity in a running experiment served no variant is exposed to control
+    Given the environment has the following features:
+      | feature  | enabled | value     |
+      | checkout | true    | "control" |
+    And a running experiment on feature "checkout" enrolling 100% of identities, serving variant "treatment" with value "new checkout" to 0% of them
+    When the application gets the experiment flag "checkout" for identity "user_123" with traits:
+      | trait | value     |
+      | plan  | "premium" |
+    Then the application receives the following flags:
+      | feature  | enabled | value     |
+      | checkout | true    | "control" |
+    And Flagsmith has received the following events:
+      | event          | feature  | identifier | value     | traits              | metadata                          |
+      | $flag_exposure | checkout | user_123   | "control" | {"plan": "premium"} | {"experiment_id": "<experiment>"} |
 
   Scenario: An identity a running experiment does not enroll is not exposed
     Given the environment has the following features:
       | feature  | enabled | value     |
       | checkout | true    | "control" |
-    And a running experiment on feature "checkout" serving variant "treatment" with value "new checkout" to 0% of identities
+    And a running experiment on feature "checkout" enrolling 0% of identities, serving variant "treatment" with value "new checkout" to 100% of them
     When the application gets the experiment flag "checkout" for identity "user_123" with traits:
       | trait | value     |
       | plan  | "premium" |

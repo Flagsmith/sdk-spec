@@ -108,13 +108,14 @@ class FlagsmithAdmin:
         feature: str,
         variant: str,
         value: Any,
-        rollout_percentage: int = 100,
-    ) -> None:
-        """Runs an experiment on the feature, serving `variant` to the identities it enrolls.
+        rollout_percentage: int,
+        variant_percentage: int,
+    ) -> int:
+        """Runs an experiment on the feature, and returns its id.
 
-        It enrolls `rollout_percentage` of identities. A rollout of 100% or 0%, with a single
-        variant at 100%, keeps the scenario deterministic: every identity is enrolled and served
-        that variant, or none is.
+        It enrolls `rollout_percentage` of identities, and serves `variant` to
+        `variant_percentage` of those; the rest are served the feature's value as control.
+        Percentages of 100% or 0% keep the scenario deterministic.
         """
         control = environment.features[feature]
         option = self._request(
@@ -141,7 +142,10 @@ class FlagsmithAdmin:
                     # What an enrolled identity is served when it is allocated no variant.
                     "feature_state_value": _rollout_value(control.value),
                     "multivariate_feature_state_values": [
-                        {"multivariate_feature_option": option["id"], "percentage_allocation": 100}
+                        {
+                            "multivariate_feature_option": option["id"],
+                            "percentage_allocation": variant_percentage,
+                        }
                     ],
                     # No segments: the experiment targets every identity in the environment.
                     "audience": {"match": "any", "segment_ids": []},
@@ -151,6 +155,7 @@ class FlagsmithAdmin:
         self._request(
             "POST", f"/environments/{environment.api_key}/experiments/{experiment['id']}/start/"
         )
+        return experiment["id"]
 
     def create_trait_segment(
         self, environment: Environment, name: str, trait: str, operator: str, value: Any

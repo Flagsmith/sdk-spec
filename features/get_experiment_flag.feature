@@ -26,7 +26,7 @@ Feature: Get an experiment flag
     Given the environment has the following features:
       | feature | enabled | value     |
       | banner  | true    | "control" |
-    And a running experiment on feature "banner" serving variant "treatment" with value "hello treatment"
+    And a running experiment on feature "banner" enrolling 100% of identities, serving variant "treatment" with value "hello treatment" to 100% of them
     When the application gets the experiment flag "banner" for identity "user_123" with traits:
       | trait | value     |
       | plan  | "premium" |

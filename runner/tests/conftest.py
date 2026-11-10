@@ -68,6 +68,7 @@ class ScenarioState:
     client: str | None = None
     events: bool = False
     local_evaluation: bool = False
+    experiment_id: int | None = None
     result: Any = None
 
 
@@ -277,9 +278,12 @@ def environment_features(
 
 @given(
     parsers.re(
-        r'a running experiment on feature "(?P<feature>[^"]+)" serving variant "(?P<variant>[^"]+)"'
-        r" with value (?P<value>.+?)(?: to (?P<rollout>\d+)% of identities)?"
-    )
+        r'a running experiment on feature "(?P<feature>[^"]+)"'
+        r" enrolling (?P<rollout>\d+)% of identities,"
+        r' serving variant "(?P<variant>[^"]+)" with value (?P<value>.+)'
+        r" to (?P<allocation>\d+)% of them"
+    ),
+    converters={"rollout": int, "allocation": int},
 )
 def running_experiment(
     state: ScenarioState,
@@ -287,15 +291,12 @@ def running_experiment(
     feature: str,
     variant: str,
     value: str,
-    rollout: str | None,
+    rollout: int,
+    allocation: int,
 ) -> None:
-    """Runs an experiment on the feature, enrolling every identity unless a rollout is given."""
-    flagsmith.start_experiment(
-        require_environment(state),
-        feature,
-        variant,
-        parse_value(value),
-        100 if rollout is None else int(rollout),
+    """Runs an experiment on the feature. Identities not served the variant are its control."""
+    state.experiment_id = flagsmith.start_experiment(
+        require_environment(state), feature, variant, parse_value(value), rollout, allocation
     )
 
 
@@ -367,6 +368,19 @@ EVENT_FIELDS = {"feature": "feature_name"}
 EVENT_VALUES = ("value", "traits", "metadata")
 
 
+# A metadata value standing for the id of the scenario's experiment, which Flagsmith assigns.
+EXPERIMENT_ID = "<experiment>"
+
+
+def with_experiment_id(metadata: Any, state: ScenarioState) -> Any:
+    if not isinstance(metadata, dict):
+        return metadata
+    return {
+        key: state.experiment_id if value == EXPERIMENT_ID else value
+        for key, value in metadata.items()
+    }
+
+
 def event_as_expected(event: dict[str, Any], expectation: dict[str, Any]) -> dict[str, Any]:
     """The part of a delivered event its expectation names, in the expectation's terms."""
     actual = {column: event.get(EVENT_FIELDS.get(column, column)) for column in expectation}
@@ -386,6 +400,9 @@ def received_events(
         {key: parse_value(value) if key in EVENT_VALUES else value for key, value in row.items()}
         for row in table_rows(datatable)
     ]
+    for expectation in expected:
+        if "metadata" in expectation:
+            expectation["metadata"] = with_experiment_id(expectation["metadata"], state)
     delivered = warehouse.wait_for_events(require_environment(state).api_key, len(expected))
     assert len(delivered) == len(expected), f"Flagsmith received {delivered}"
     for event, expectation in zip(delivered, expected):
