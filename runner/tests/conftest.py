@@ -268,6 +268,9 @@ sdk_step(
     'the application tracks an exposure of feature "{feature}" for identity "{identifier}"'
     " with value {value} and metadata:"
 )
+sdk_step(
+    'the application tracks events "event_{first}" to "event_{last}" for identity "{identifier}"'
+)
 sdk_step("the application flushes events")
 sdk_step("the application closes the client with a timeout of {timeout} seconds")
 
@@ -488,6 +491,25 @@ def waited_less_than(state: ScenarioState, seconds: str) -> None:
     assert state.elapsed_seconds is not None, "The application has not used the SDK"
     assert state.elapsed_seconds < parse_value(seconds), (
         f"The application waited {state.elapsed_seconds:.1f} seconds"
+    )
+
+
+@then(parsers.parse('Flagsmith has received exactly events "event_{first:d}" to "event_{last:d}"'))
+def received_numbered_events(
+    state: ScenarioState, warehouse: Warehouse, first: int, last: int
+) -> None:
+    """Checks the SDK sent each of a range of numbered events once, and no other event.
+
+    Order is not checked: the warehouse orders events by time, which many of them share.
+    """
+    expected = [f"event_{number}" for number in range(first, last + 1)]
+    delivered = warehouse.wait_for_events(require_environment(state).api_key, len(expected))
+    names = sorted(event["event"] for event in delivered)
+    missing = sorted(set(expected) - set(names))
+    unexpected = sorted(set(names) - set(expected))
+    assert names == sorted(expected), (
+        f"Flagsmith received {len(names)} events; missing {missing[:10]}, "
+        f"unexpected {unexpected[:10]}"
     )
 
 

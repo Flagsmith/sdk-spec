@@ -76,6 +76,18 @@ Feature: Deliver events
       | add_to_cart | user_123   | "1"   |
       | checkout    | user_123   | "42"  |
 
+  Scenario: A full buffer drops its oldest event
+    Given the events API responds to the next requests with:
+      | response |
+      | 503      |
+      | 503      |
+      | 503      |
+    When the application tracks events "event_1" to "event_1000" for identity "user_123"
+    And the application flushes events
+    And the application tracks events "event_1001" to "event_1001" for identity "user_123"
+    And the application flushes events
+    Then Flagsmith has received exactly events "event_2" to "event_1001"
+
   Scenario: A batch the events API rejects is dropped
     Given the events API responds to the next requests with:
       | response |
