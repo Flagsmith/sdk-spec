@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from pytest_bdd import given, parsers, then, when
+from pytest_bdd.parser import Scenario
 
 from sdk_spec.fake_events import FakeEvents
 from sdk_spec.flagsmith_admin import Environment, FlagsmithAdmin
@@ -181,6 +182,7 @@ CREATE_CLIENT_WITH_LOCAL_EVALUATION_AND_EVENTS = (
     "Create the SDK client with local evaluation and events enabled"
 )
 SDK_STEPS: list[str] = []
+SDK_STEP_PARSERS: list[tuple[parsers.parse, str]] = []
 PLACEHOLDER = re.compile(r'("?)\{(\w+)\}\1')
 
 
@@ -231,8 +233,25 @@ def sdk_step(pattern: str) -> None:
         [inspect.Parameter(name, inspect.Parameter.POSITIONAL_OR_KEYWORD) for name in parameters]
     )
     run.__name__ = re.sub(r"\W+", "_", pattern).strip("_")
-    when(parsers.parse(pattern), stacklevel=2)(run)
+    parser = parsers.parse(pattern)
+    when(parser, stacklevel=2)(run)
     SDK_STEPS.append(text)
+    SDK_STEP_PARSERS.append((parser, text))
+
+
+def pytest_bdd_before_scenario(request: pytest.FixtureRequest, scenario: Scenario) -> None:
+    """Ends a scenario using an SDK step the SDK does not implement before it changes anything.
+
+    Otherwise it would set up Flagsmith and track events for nothing, and an SDK sharing state
+    between clients would send those events in a later scenario.
+    """
+    sdk: SDK = request.getfixturevalue("sdk")
+    for step in scenario.steps:
+        if step.type != "when":
+            continue
+        for parser, text in SDK_STEP_PARSERS:
+            if parser.is_matching(step.name) and text not in sdk.implemented_steps:
+                sdk_module.report_missing(text)
 
 
 sdk_step("the application gets the environment flags")
