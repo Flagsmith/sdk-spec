@@ -3,9 +3,6 @@ Feature: Flush events and close the client
   An application flushes events, or closes the client, so that its events are not lost when it
   stops. Neither ever fails the application.
 
-  - Flushing sends the buffered events, and returns once they are sent, retries included.
-  - Closing flushes, and returns within the timeout the application gives it.
-
   Background:
     Given a Flagsmith environment
     And the SDK sends events to Flagsmith

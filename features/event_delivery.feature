@@ -3,15 +3,6 @@ Feature: Deliver events
   An SDK delivers events despite transient failures of the events API, without ever failing
   the application.
 
-  - A request that times out, loses its connection, or gets a 408, 429, 500, 502, 503 or 504
-    is retried: 3 attempts, backing off from 1 second, doubling, with full jitter. Any other
-    status drops the batch.
-  - Each request times out after 3 seconds.
-  - A batch that still fails stays buffered, ahead of newer events, for the next flush, unless
-    its last attempt got a 500: then it is dropped. The buffer holds 1000 events, and drops the
-    oldest when full. One batch is in flight at a time.
-  - A 401 or 403 drops the buffer, stops sending, and makes tracking a no-op.
-
   Background:
     Given a Flagsmith environment
     And the SDK sends events to Flagsmith
