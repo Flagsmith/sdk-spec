@@ -1,0 +1,178 @@
+@events
+Feature: Deliver events
+  An SDK delivers events despite transient failures of the events API, without ever failing
+  the application. Retries back off from 1 second, doubling, with full jitter, and one batch is in
+  flight at a time.
+
+  Background:
+    Given a Flagsmith environment
+    And the SDK sends events to Flagsmith
+
+  Scenario: A batch is retried until the events API accepts it
+    Given the events API fails the next requests with:
+      | failure    |
+      | 503        |
+      | ECONNRESET |
+    When the application tracks event "checkout" for identity "user_123" with value 42 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    Then the SDK has sent the following events to the events API:
+      | response   | event    |
+      | 503        | checkout |
+      | ECONNRESET | checkout |
+      | 202        | checkout |
+    And the SDK waited at most the following before each retry:
+      | retry | seconds |
+      | 1     | 1       |
+      | 2     | 2       |
+    And Flagsmith has received the following events:
+      | event    | identifier | value |
+      | checkout | user_123   | "42"  |
+
+  Scenario: A request the events API does not answer times out and is retried
+    Given the events API fails the next requests with:
+      | failure   |
+      | ETIMEDOUT |
+    When the application tracks event "checkout" for identity "user_123" with value 42 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    Then the application waited less than 7 seconds
+    And the SDK gave up on each unanswered request after 3 seconds
+    And the SDK has sent the following events to the events API:
+      | response  | event    |
+      | ETIMEDOUT | checkout |
+      | 202       | checkout |
+    And Flagsmith has received the following events:
+      | event    | identifier | value |
+      | checkout | user_123   | "42"  |
+
+  Scenario: A batch that keeps failing is sent with the next flush, ahead of events tracked since
+    Given the events API fails the next requests with:
+      | failure |
+      | 503     |
+      | 503     |
+      | 503     |
+    When the application tracks event "add_to_cart" for identity "user_123" with value 1 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    And the application tracks event "checkout" for identity "user_123" with value 42 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    Then the SDK has sent the following events to the events API:
+      | response | event       |
+      | 503      | add_to_cart |
+      | 503      | add_to_cart |
+      | 503      | add_to_cart |
+      | 202      | add_to_cart |
+      | 202      | checkout    |
+    And Flagsmith has received the following events:
+      | event       | identifier | value |
+      | add_to_cart | user_123   | "1"   |
+      | checkout    | user_123   | "42"  |
+
+  Scenario: A full buffer drops its oldest event
+    Given the events API fails the next requests with:
+      | failure |
+      | 503     |
+      | 503     |
+      | 503     |
+    When the application tracks events "event_1" to "event_1000" for identity "user_123"
+    And the application flushes events
+    And the application tracks events "event_1001" to "event_1001" for identity "user_123"
+    And the application flushes events
+    Then Flagsmith has received exactly events "event_2" to "event_1001"
+
+  Scenario: A batch the events API rejects is dropped
+    Given the events API fails the next requests with:
+      | failure |
+      | 400     |
+    When the application tracks event "add_to_cart" for identity "user_123" with value 1 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    And the application tracks event "checkout" for identity "user_123" with value 42 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    Then the SDK has sent the following events to the events API:
+      | response | event       |
+      | 400      | add_to_cart |
+      | 202      | checkout    |
+    And Flagsmith has received the following events:
+      | event    | identifier | value |
+      | checkout | user_123   | "42"  |
+
+  Scenario: A batch whose last attempt gets a server error is dropped
+    Given the events API fails the next requests with:
+      | failure |
+      | 503     |
+      | 503     |
+      | 500     |
+    When the application tracks event "add_to_cart" for identity "user_123" with value 1 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    And the application tracks event "checkout" for identity "user_123" with value 42 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    Then the SDK has sent the following events to the events API:
+      | response | event       |
+      | 503      | add_to_cart |
+      | 503      | add_to_cart |
+      | 500      | add_to_cart |
+      | 202      | checkout    |
+    And Flagsmith has received the following events:
+      | event    | identifier | value |
+      | checkout | user_123   | "42"  |
+
+  Scenario: A batch whose last attempt fails otherwise is kept, after server errors
+    Given the events API fails the next requests with:
+      | failure |
+      | 500     |
+      | 500     |
+      | 503     |
+    When the application tracks event "add_to_cart" for identity "user_123" with value 1 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    And the application tracks event "checkout" for identity "user_123" with value 42 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    Then the SDK has sent the following events to the events API:
+      | response | event       |
+      | 500      | add_to_cart |
+      | 500      | add_to_cart |
+      | 503      | add_to_cart |
+      | 202      | add_to_cart |
+      | 202      | checkout    |
+    And Flagsmith has received the following events:
+      | event       | identifier | value |
+      | add_to_cart | user_123   | "1"   |
+      | checkout    | user_123   | "42"  |
+
+  Scenario Outline: An events API refusing the environment key stops event tracking
+    Given the events API fails the next requests with:
+      | failure  |
+      | <status> |
+    When the application tracks event "add_to_cart" for identity "user_123" with value 1 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    And the application tracks event "checkout" for identity "user_123" with value 42 and metadata:
+      | key      | value |
+      | currency | "GBP" |
+    And the application flushes events
+    Then the SDK has sent the following events to the events API:
+      | response | event       |
+      | <status> | add_to_cart |
+
+    Examples:
+      | status |
+      | 401    |
+      | 403    |

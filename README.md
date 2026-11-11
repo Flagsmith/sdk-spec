@@ -7,6 +7,8 @@ executed against every SDK.
 - [`runner/`](runner) — executes the spec (pytest-bdd). Step definitions live here, written once for
   every SDK.
 - [`compose.yml`](compose.yml) — the Flagsmith services (pinned) the spec runs against.
+- [`events-test-proxy/`](events-test-proxy) — a proxy in front of Flagsmith's events API, which
+  scenarios make fail.
 - [`harness/`](harness) — one harness per language, running an SDK's steps file
   ([`HARNESS.md`](HARNESS.md)).
 - [`.github/workflows/run-spec.yml`](.github/workflows/run-spec.yml) — reusable workflow SDKs call.
@@ -23,6 +25,10 @@ executed against every SDK.
  │        │ ──────► │ harness ─► SDK steps file    │──┤ SDK API calls
  │        │         │ (SDK image, built from source)│  │
  │        │         └──────────────────────────────┘  │ events
+ │        │  fail requests & read them        ┌───────▼────┐
+ │        │ ────────────────────────────────► │ events     │
+ │        │                                   │ test proxy │
+ │        │                                   └───────┬────┘
  │        │                                   ┌───────▼────┐
  │        │                                   │ events API │
  │        │                                   └───────┬────┘
@@ -50,6 +56,11 @@ a ClickHouse standing in for the environment's warehouse. A scenario that says
 `Given the SDK sends events to Flagsmith` gets the warehouse connected to its environment — the
 events API only accepts an environment that has one — and a client with events enabled pointed at
 the events API. The runner then reads the delivered events out of the warehouse.
+
+SDKs reach the events API through a proxy in front of it.
+A scenario about delivering events despite failures sets up how the proxy answers the SDK's next
+requests instead (`Given the events API fails the next requests with:`), and checks the
+events it received (`Then the SDK has sent the following events to the events API:`).
 
 ## Writing scenarios
 
@@ -167,19 +178,20 @@ SDK_COMMAND="docker run -i --rm --network sdk-spec_default sdk-spec-sdk" \
 uv run pytest -v
 ```
 
-| Variable            | Default                 | Purpose                                         |
-| ------------------- | ----------------------- | ----------------------------------------------- |
-| `SDK_COMMAND`       | (required)              | Starts the SDK under its harness                |
-| `MISSING_STEPS`     | `fail`                  | `xfail` makes missing steps expected failures   |
-| `FLAGSMITH_URL`     | `http://localhost:8000` | Where the runner reaches Flagsmith              |
-| `FLAGSMITH_SDK_URL` | `$FLAGSMITH_URL`        | Where the SDK reaches Flagsmith                 |
-| `FLAGSMITH_PORT`    | `8000`                  | Host port for Flagsmith (`compose.yml`)         |
-| `FLAGSMITH_IMAGE`   | pinned version          | Override the Flagsmith image (`compose.yml`)    |
-| `EVENTS_SDK_URL`    | `http://events:8080`    | Where the SDK reaches the events API            |
-| `EVENTS_PORT`       | `8080`                  | Host port for the events API (`compose.yml`)    |
-| `WAREHOUSE_URL`     | `http://localhost:8123` | Where the runner reaches the warehouse          |
-| `WAREHOUSE_HOST`    | `clickhouse`            | Where Flagsmith reaches the warehouse           |
-| `CLICKHOUSE_PORT`   | `8123`                  | Host port for the warehouse (`compose.yml`)     |
+| Variable            | Default                         | Purpose                                                 |
+| ------------------- | ------------------------------- | ------------------------------------------------------- |
+| `SDK_COMMAND`       | (required)                      | Starts the SDK under its harness                        |
+| `MISSING_STEPS`     | `fail`                          | `xfail` makes missing steps expected failures           |
+| `FLAGSMITH_URL`     | `http://localhost:8000`         | Where the runner reaches Flagsmith                      |
+| `FLAGSMITH_SDK_URL` | `$FLAGSMITH_URL`                | Where the SDK reaches Flagsmith                         |
+| `FLAGSMITH_PORT`    | `8000`                          | Host port for Flagsmith (`compose.yml`)                 |
+| `FLAGSMITH_IMAGE`   | pinned version                  | Override the Flagsmith image (`compose.yml`)            |
+| `EVENTS_SDK_URL`    | `http://events-test-proxy:8080` | Where the SDK reaches the events API                    |
+| `EVENTS_URL`        | `http://localhost:8080`         | Where the runner reaches the events test proxy API      |
+| `EVENTS_PORT`       | `8080`                          | Host port for the events test proxy API (`compose.yml`) |
+| `WAREHOUSE_URL`     | `http://localhost:8123`         | Where the runner reaches the warehouse                  |
+| `WAREHOUSE_HOST`    | `clickhouse`                    | Where Flagsmith reaches the warehouse                   |
+| `CLICKHOUSE_PORT`   | `8123`                          | Host port for the warehouse (`compose.yml`)             |
 
 `SDK_COMMAND` can be any command, so you can also run a harness straight against an SDK checkout,
 without Docker, e.g. `python ../harness/python/harness.py ../../flagsmith-python-client/sdk-spec/steps.py`.

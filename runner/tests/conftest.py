@@ -2,13 +2,16 @@ import inspect
 import json
 import os
 import re
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from pytest_bdd import given, parsers, then, when
+from pytest_bdd.parser import Scenario
 
+from sdk_spec.events_test_proxy import EventsTestProxy
 from sdk_spec.flagsmith_admin import Environment, FlagsmithAdmin
 from sdk_spec import sdk as sdk_module
 from sdk_spec.sdk import SDK
@@ -19,9 +22,12 @@ FLAGSMITH_URL = os.environ.get("FLAGSMITH_URL", "http://localhost:8000")
 # Where the SDK under test reaches Flagsmith. Differs from FLAGSMITH_URL when the
 # SDK runs on a different network, e.g. a container network.
 FLAGSMITH_SDK_URL = os.environ.get("FLAGSMITH_SDK_URL", FLAGSMITH_URL)
-# Where the SDK under test reaches Flagsmith's events API. Unlike Flagsmith, which can be
-# anywhere, it is part of the spec's compose project, so it defaults to its service there.
-EVENTS_SDK_URL = os.environ.get("EVENTS_SDK_URL", "http://events:8080")
+# Where the SDK under test reaches Flagsmith's events API, through the proxy in front of it.
+# Unlike Flagsmith, which can be anywhere, it is part of the spec's compose project, so it
+# defaults to its service there.
+EVENTS_SDK_URL = os.environ.get("EVENTS_SDK_URL", "http://events-test-proxy:8080")
+# Where the runner reaches that proxy, to make it fail and to read the requests it received.
+EVENTS_URL = os.environ.get("EVENTS_URL", "http://localhost:8080")
 # Where the runner reaches the warehouse the spec connects to its environments, to read
 # back the events delivered to it, and how Flagsmith and warehouse delivery reach it.
 WAREHOUSE_URL = os.environ.get("WAREHOUSE_URL", "http://localhost:8123")
@@ -42,7 +48,7 @@ SDK_COMMAND = os.environ.get("SDK_COMMAND", "")
 def pytest_report_header() -> list[str]:
     return [
         f"flagsmith: {FLAGSMITH_URL} (SDK uses {FLAGSMITH_SDK_URL})",
-        f"events: {EVENTS_SDK_URL} (SDK), warehouse: {WAREHOUSE_URL} (runner)",
+        f"events: {EVENTS_SDK_URL} (SDK), {EVENTS_URL} (runner), warehouse: {WAREHOUSE_URL}",
         f"sdk: {SDK_COMMAND}",
         f"missing steps: {sdk_module.MISSING_STEPS}",
     ]
@@ -70,6 +76,7 @@ class ScenarioState:
     local_evaluation: bool = False
     experiment_id: int | None = None
     result: Any = None
+    elapsed_seconds: float | None = None
 
 
 @pytest.fixture(scope="session")
@@ -91,6 +98,13 @@ def warehouse() -> Warehouse:
     )
     warehouse.wait_until_healthy()
     return warehouse
+
+
+@pytest.fixture(scope="session")
+def events_test_proxy() -> EventsTestProxy:
+    proxy = EventsTestProxy(EVENTS_URL)
+    proxy.wait_until_healthy()
+    return proxy
 
 
 @pytest.fixture(scope="session")
@@ -168,6 +182,7 @@ CREATE_CLIENT_WITH_LOCAL_EVALUATION_AND_EVENTS = (
     "Create the SDK client with local evaluation and events enabled"
 )
 SDK_STEPS: list[str] = []
+SDK_STEP_PARSERS: list[tuple[parsers.parse, str]] = []
 PLACEHOLDER = re.compile(r'("?)\{(\w+)\}\1')
 
 
@@ -206,7 +221,10 @@ def sdk_step(pattern: str) -> None:
         ]
         if has_table:
             args.append(table_argument(kwargs["datatable"]))
-        state.result = sdk.step(text, args, client=sdk_client(state, sdk))
+        client = sdk_client(state, sdk)
+        started = time.monotonic()
+        state.result = sdk.step(text, args, client=client)
+        state.elapsed_seconds = time.monotonic() - started
 
     parameters = ["state", "sdk", *(name for _, name in placeholders)]
     if has_table:
@@ -215,8 +233,25 @@ def sdk_step(pattern: str) -> None:
         [inspect.Parameter(name, inspect.Parameter.POSITIONAL_OR_KEYWORD) for name in parameters]
     )
     run.__name__ = re.sub(r"\W+", "_", pattern).strip("_")
-    when(parsers.parse(pattern), stacklevel=2)(run)
+    parser = parsers.parse(pattern)
+    when(parser, stacklevel=2)(run)
     SDK_STEPS.append(text)
+    SDK_STEP_PARSERS.append((parser, text))
+
+
+def pytest_bdd_before_scenario(request: pytest.FixtureRequest, scenario: Scenario) -> None:
+    """Ends a scenario using an SDK step the SDK does not implement before it changes anything.
+
+    Otherwise it would set up Flagsmith and track events for nothing, and an SDK sharing state
+    between clients would send those events in a later scenario.
+    """
+    sdk: SDK = request.getfixturevalue("sdk")
+    for step in scenario.steps:
+        if step.type != "when":
+            continue
+        for parser, text in SDK_STEP_PARSERS:
+            if parser.is_matching(step.name) and text not in sdk.implemented_steps:
+                sdk_module.report_missing(text)
 
 
 sdk_step("the application gets the environment flags")
@@ -233,6 +268,11 @@ sdk_step(
     'the application tracks an exposure of feature "{feature}" for identity "{identifier}"'
     " with value {value} and metadata:"
 )
+sdk_step(
+    'the application tracks events "event_{first}" to "event_{last}" for identity "{identifier}"'
+)
+sdk_step("the application flushes events")
+sdk_step("the application closes the client with a timeout of {timeout} seconds")
 
 
 # Given: the runner sets up Flagsmith
@@ -253,6 +293,36 @@ def sdk_sends_events(state: ScenarioState, flagsmith: FlagsmithAdmin) -> None:
     assert state.client is None, "The SDK client has already been created without events"
     flagsmith.connect_warehouse(require_environment(state), WAREHOUSE_CONFIG)
     state.events = True
+
+
+# Failures of a request to the events API, named after the error the SDK gets.
+CONNECTION_RESET = "ECONNRESET"
+TIMED_OUT = "ETIMEDOUT"
+
+
+def parse_response(raw: str) -> int | str:
+    """A response to a request: an HTTP status code, ECONNRESET or ETIMEDOUT."""
+    if raw.isdigit():
+        return int(raw)
+    if raw in (CONNECTION_RESET, TIMED_OUT):
+        return raw
+    raise ValueError(f"{raw!r} is not a status code, {CONNECTION_RESET} or {TIMED_OUT}")
+
+
+@given("the events API fails the next requests with:")
+def events_api_failures(
+    state: ScenarioState, events_test_proxy: EventsTestProxy, datatable: list[list[str]]
+) -> None:
+    """Fails the SDK's next requests to the events API, in order; later ones reach it.
+
+    A failure is a status code, ECONNRESET (the connection is reset), or ETIMEDOUT (the request
+    goes unanswered until the SDK gives up on it).
+    """
+    assert state.events, "Scenario must say 'Given the SDK sends events to Flagsmith' first"
+    events_test_proxy.fail(
+        require_environment(state).server_side_key,
+        [parse_response(row["failure"]) for row in table_rows(datatable)],
+    )
 
 
 @given("the SDK evaluates flags locally")
@@ -407,6 +477,91 @@ def received_events(
     assert len(delivered) == len(expected), f"Flagsmith received {delivered}"
     for event, expectation in zip(delivered, expected):
         assert event_as_expected(event, expectation) == expectation, f"Flagsmith received {event}"
+
+
+@then("the SDK has sent the following events to the events API:")
+def sent_events(
+    state: ScenarioState, events_test_proxy: EventsTestProxy, datatable: list[list[str]]
+) -> None:
+    """Checks every event the SDK sent, in the order it sent them, with the response the request
+    carrying each got: a failure it was given, or the events API's status code. How events are
+    grouped into requests is up to the SDK.
+    """
+    expected = [
+        {"response": parse_response(row["response"]), "event": row["event"]}
+        for row in table_rows(datatable)
+    ]
+    actual = [
+        {"response": request["response"], "event": event.get("event")}
+        for request in events_test_proxy.requests(require_environment(state).server_side_key)
+        for event in request["events"]
+    ]
+    assert actual == expected
+
+
+# Allowed for the SDK's own work, and the network, around a time measured at the proxy.
+PROXY_TIMING_TOLERANCE_SECONDS = 0.5
+
+
+@then(parsers.parse("the SDK gave up on each unanswered request after {seconds:d} seconds"))
+def gave_up_after(state: ScenarioState, events_test_proxy: EventsTestProxy, seconds: int) -> None:
+    """Checks how long the SDK waited on each ETIMEDOUT request before closing its connection."""
+    unanswered = [
+        request
+        for request in events_test_proxy.requests(require_environment(state).server_side_key)
+        if request["response"] == TIMED_OUT
+    ]
+    assert unanswered, "The SDK has sent no request the events API left unanswered"
+    held = [request["answered_at"] - request["received_at"] for request in unanswered]
+    assert all(abs(h - seconds) <= PROXY_TIMING_TOLERANCE_SECONDS for h in held), (
+        f"The SDK gave up after {', '.join(f'{h:.2f}' for h in held)} seconds"
+    )
+
+
+@then("the SDK waited at most the following before each retry:")
+def retry_waits(
+    state: ScenarioState, events_test_proxy: EventsTestProxy, datatable: list[list[str]]
+) -> None:
+    """Checks the time between a request being answered and the SDK's next request.
+
+    Only upper bounds: with full jitter, any wait from none up to the backoff is correct.
+    """
+    requests = events_test_proxy.requests(require_environment(state).server_side_key)
+    for row in table_rows(datatable):
+        retry, limit = int(row["retry"]), parse_value(row["seconds"])
+        assert len(requests) > retry, f"The SDK has not made retry {retry}"
+        waited = requests[retry]["received_at"] - requests[retry - 1]["answered_at"]
+        assert waited <= limit + PROXY_TIMING_TOLERANCE_SECONDS, (
+            f"The SDK waited {waited:.2f} seconds before retry {retry}"
+        )
+
+
+@then(parsers.parse("the application waited less than {seconds} seconds"))
+def waited_less_than(state: ScenarioState, seconds: str) -> None:
+    """Checks how long the last SDK step took to return."""
+    assert state.elapsed_seconds is not None, "The application has not used the SDK"
+    assert state.elapsed_seconds < parse_value(seconds), (
+        f"The application waited {state.elapsed_seconds:.1f} seconds"
+    )
+
+
+@then(parsers.parse('Flagsmith has received exactly events "event_{first:d}" to "event_{last:d}"'))
+def received_numbered_events(
+    state: ScenarioState, warehouse: Warehouse, first: int, last: int
+) -> None:
+    """Checks the SDK sent each of a range of numbered events once, and no other event.
+
+    Order is not checked: the warehouse orders events by time, which many of them share.
+    """
+    expected = [f"event_{number}" for number in range(first, last + 1)]
+    delivered = warehouse.wait_for_events(require_environment(state).api_key, len(expected))
+    names = sorted(event["event"] for event in delivered)
+    missing = sorted(set(expected) - set(names))
+    unexpected = sorted(set(names) - set(expected))
+    assert names == sorted(expected), (
+        f"Flagsmith received {len(names)} events; missing {missing[:10]}, "
+        f"unexpected {unexpected[:10]}"
+    )
 
 
 @then("Flagsmith has received no events")
