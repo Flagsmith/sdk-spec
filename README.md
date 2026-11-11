@@ -67,7 +67,8 @@ events it received (`Then the SDK has sent the following events to the events AP
 - Describe behaviour, not wire details: assert on what the application receives and what Flagsmith
   ends up with.
 - Table cells and value arguments are JSON literals: `"text"`, `42`, `true`, `null`.
-- Tag every feature with a capability (`@core`, …). SDKs select capabilities with a tag expression.
+- Tag every feature with a capability (`@core`, …). Tag a feature needing several capabilities with
+  all of them (`@local-evaluation @events`): it runs only for SDKs that support every one.
   Register new tags under `markers` in [`runner/pyproject.toml`](runner/pyproject.toml).
 - Prefer reusing existing steps in [`runner/tests/conftest.py`](runner/tests/conftest.py).
 - A new `When` step is registered with one `sdk_step(...)` line in the runner. It is a minor
@@ -109,6 +110,8 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
    - `Create the SDK client with local evaluation` receives the same two as `Create the SDK client`,
      and returns a client that evaluates flags locally, with its environment already loaded. Only
      `@local-evaluation` scenarios use it, so an SDK without local evaluation can leave it out.
+     Client-side SDKs do not support local evaluation: they leave out both local evaluation steps
+     and leave `local-evaluation` out of their `tags` (see step 3).
    - `Create the SDK client with local evaluation and events enabled` receives the same three as
      `Create the SDK client with events enabled`, and returns a client that does both. Only
      scenarios tagged both `@local-evaluation` and `@events` use it.
@@ -138,8 +141,13 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
        with:
          spec-ref: v0.3.0  # keep in sync with `uses:`
          language: python
-         tags: core        # optional: select capabilities
+         tags: core events  # the capabilities the SDK supports
    ```
+
+   `tags` lists the capabilities the SDK supports, space-separated. A scenario runs only if the SDK
+   supports all its capabilities, so `core events` leaves out the `@local-evaluation @events`
+   scenarios. Server-side SDKs list `core events local-evaluation`, client-side SDKs `core events`.
+   Empty runs every scenario.
 
 4. Let Renovate bump both refs together:
 
