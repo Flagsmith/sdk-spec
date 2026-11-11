@@ -67,6 +67,8 @@ events it received (`Then the SDK has sent the following events to the events AP
 - Describe behaviour, not wire details: assert on what the application receives and what Flagsmith
   ends up with.
 - Table cells and value arguments are JSON literals: `"text"`, `42`, `true`, `null`.
+- `Then the application receives the following flags:` checks each flag's `reason` only when its
+  table has a `reason` column.
 - Tag every feature with a capability (`@core`, …). Tag a feature needing several capabilities with
   all of them (`@local-evaluation @events`): it runs only for SDKs that support every one.
   Register new tags under `markers` in [`runner/pyproject.toml`](runner/pyproject.toml).
@@ -118,7 +120,11 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
    - A `When` step receives the client, then the step's placeholders in order, then its data table.
      A `<key> | value` table arrives as a map, e.g. `{"plan": "premium", "age": 30}`.
    - Values are JSON values. Pass flag and trait values through with their types intact.
-   - Steps that get flags return a list of `{"feature": …, "enabled": …, "value": …}`.
+   - Steps that get flags return a list of `{"feature": …, "enabled": …, "value": …, "reason": …}`.
+     `reason` is the reason the SDK gives the application for the flag's evaluation, e.g.
+     `"TARGETING_MATCH; segment=premium_users"`: with local evaluation, the engine's
+     `FlagResult.reason`; with remote evaluation, the `reason` Flagsmith's response carries, or
+     `null` without one.
    - Let SDK errors propagate: the scenario fails with the error.
 
    Keep it to SDK calls. The steps file doubles as a working, CI-checked usage example.

@@ -439,14 +439,13 @@ def flag_dependency(
 
 @then("the application receives the following flags:")
 def received_flags(state: ScenarioState, datatable: list[list[str]]) -> None:
+    """Checks each flag's enabled state and value, and its reason if the table has the column."""
     assert state.result is not None, "The application has not fetched any flags"
-    expected = {
-        row["feature"]: {"enabled": parse_value(row["enabled"]), "value": parse_value(row["value"])}
-        for row in table_rows(datatable)
-    }
+    rows = table_rows(datatable)
+    fields = ["enabled", "value", *(["reason"] if "reason" in datatable[0] else [])]
+    expected = {row["feature"]: {field: parse_value(row[field]) for field in fields} for row in rows}
     actual = {
-        flag["feature"]: {"enabled": flag["enabled"], "value": flag["value"]}
-        for flag in state.result
+        flag["feature"]: {field: flag.get(field) for field in fields} for flag in state.result
     }
     assert actual == expected
 
