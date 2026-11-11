@@ -7,8 +7,10 @@ failures for its environment key: each request then fails with the next of them.
   each a status code, `"ECONNRESET"` (the connection is reset) or `"ETIMEDOUT"` (the request is
   held until the SDK gives up on it).
 - `GET /test-proxy/environments/<key>/requests` returns `{"requests": [...]}`, every request
-  received for the key in order, as `{"response": ..., "events": [...]}`. `response` is the
-  failure it took, or the events API's status when it was forwarded.
+  received for the key in order, as `{"response": ..., "events": [...], "received_at": ...,
+  "answered_at": ...}`. `response` is the failure it took, or the events API's status when it
+  was forwarded. `received_at` and `answered_at` are seconds on one monotonic clock: when the
+  request arrived, and when the proxy answered it or closed its connection.
 """
 
 import json
@@ -48,6 +50,7 @@ class Handler(BaseHTTPRequestHandler):
         self.handle_request()
 
     def handle_request(self) -> None:
+        received_at = time.monotonic()
         body = self.read_body()
         parts = self.path.strip("/").split("/")
         if parts == ["test-proxy", "health"]:
@@ -55,7 +58,7 @@ class Handler(BaseHTTPRequestHandler):
         elif len(parts) == 4 and parts[:2] == ["test-proxy", "environments"]:
             self.control(self.command, parts[2], parts[3], body)
         else:
-            self.proxy(body)
+            self.proxy(body, received_at)
 
     def control(self, method: str, environment_key: str, resource: str, body: bytes) -> None:
         with lock:
@@ -72,12 +75,17 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.reply(404, {"detail": f"No {method} /test-proxy/environments/<key>/{resource}"})
 
-    def proxy(self, body: bytes) -> None:
+    def proxy(self, body: bytes, received_at: float) -> None:
         environment_key = self.headers.get(ENVIRONMENT_KEY_HEADER, "")
         with lock:
             queued = failures[environment_key]
             failure = queued.popleft() if queued else None
-            request = {"response": failure, "events": events_in(body)}
+            request = {
+                "response": failure,
+                "events": events_in(body),
+                "received_at": received_at,
+                "answered_at": None,
+            }
             requests[environment_key].append(request)
         if failure is None:
             status = self.forward(body)
@@ -90,6 +98,8 @@ class Handler(BaseHTTPRequestHandler):
             self.drop_connection()
         else:
             self.reply(failure, {"detail": f"Test proxy {failure} response"})
+        with lock:
+            request["answered_at"] = time.monotonic()
 
     def forward(self, body: bytes) -> int:
         """Sends the request on to the events API, and its response back. Returns its status."""

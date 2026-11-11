@@ -499,6 +499,43 @@ def sent_events(
     assert actual == expected
 
 
+# Allowed for the SDK's own work, and the network, around a time measured at the proxy.
+PROXY_TIMING_TOLERANCE_SECONDS = 0.5
+
+
+@then(parsers.parse("the SDK gave up on each unanswered request after {seconds:d} seconds"))
+def gave_up_after(state: ScenarioState, events_test_proxy: EventsTestProxy, seconds: int) -> None:
+    """Checks how long the SDK waited on each ETIMEDOUT request before closing its connection."""
+    unanswered = [
+        request
+        for request in events_test_proxy.requests(require_environment(state).server_side_key)
+        if request["response"] == TIMED_OUT
+    ]
+    assert unanswered, "The SDK has sent no request the events API left unanswered"
+    held = [request["answered_at"] - request["received_at"] for request in unanswered]
+    assert all(abs(h - seconds) <= PROXY_TIMING_TOLERANCE_SECONDS for h in held), (
+        f"The SDK gave up after {', '.join(f'{h:.2f}' for h in held)} seconds"
+    )
+
+
+@then("the SDK waited at most the following before each retry:")
+def retry_waits(
+    state: ScenarioState, events_test_proxy: EventsTestProxy, datatable: list[list[str]]
+) -> None:
+    """Checks the time between a request being answered and the SDK's next request.
+
+    Only upper bounds: with full jitter, any wait from none up to the backoff is correct.
+    """
+    requests = events_test_proxy.requests(require_environment(state).server_side_key)
+    for row in table_rows(datatable):
+        retry, limit = int(row["retry"]), parse_value(row["seconds"])
+        assert len(requests) > retry, f"The SDK has not made retry {retry}"
+        waited = requests[retry]["received_at"] - requests[retry - 1]["answered_at"]
+        assert waited <= limit + PROXY_TIMING_TOLERANCE_SECONDS, (
+            f"The SDK waited {waited:.2f} seconds before retry {retry}"
+        )
+
+
 @then(parsers.parse("the application waited less than {seconds} seconds"))
 def waited_less_than(state: ScenarioState, seconds: str) -> None:
     """Checks how long the last SDK step took to return."""
