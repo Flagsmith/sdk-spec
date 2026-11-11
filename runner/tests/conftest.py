@@ -3,6 +3,7 @@ import json
 import os
 import re
 import time
+import tomllib
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -43,6 +44,10 @@ WAREHOUSE_CONFIG = {
 }
 # Starts the SDK's language harness, e.g. `docker run -i --rm sdk-spec-sdk`.
 SDK_COMMAND = os.environ.get("SDK_COMMAND", "")
+# The capabilities the SDK supports, e.g. `core events`: scenarios run only if the SDK
+# supports all their capabilities, so a `@local-evaluation @events` scenario needs both.
+# Empty runs every scenario.
+TAGS = os.environ.get("TAGS", "").split()
 
 
 def pytest_report_header() -> list[str]:
@@ -51,7 +56,32 @@ def pytest_report_header() -> list[str]:
         f"events: {EVENTS_SDK_URL} (SDK), {EVENTS_URL} (runner), warehouse: {WAREHOUSE_URL}",
         f"sdk: {SDK_COMMAND}",
         f"missing steps: {sdk_module.MISSING_STEPS}",
+        f"capabilities: {' '.join(TAGS) or '(every scenario)'}",
     ]
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Deselects the scenarios that need a capability the SDK doesn't support."""
+    if not TAGS:
+        return
+    # The markers registered in pyproject.toml: pytest's own markers aren't capabilities.
+    assert config.inipath is not None
+    with config.inipath.open("rb") as file:
+        markers = tomllib.load(file)["tool"]["pytest"]["ini_options"]["markers"]
+    capabilities = {marker.partition(":")[0].strip() for marker in markers}
+    if unknown := sorted(set(TAGS) - capabilities):
+        raise pytest.UsageError(
+            f"TAGS lists unknown capabilities: {', '.join(unknown)}. It is a space-separated"
+            f" list of capabilities, not an expression; known: {', '.join(sorted(capabilities))}"
+        )
+    selected: list[pytest.Item] = []
+    deselected: list[pytest.Item] = []
+    for item in items:
+        required = {marker.name for marker in item.iter_markers()} & capabilities
+        (selected if required <= set(TAGS) else deselected).append(item)
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
 
 
 def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter) -> None:

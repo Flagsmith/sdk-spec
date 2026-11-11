@@ -23,8 +23,8 @@ on:
         default: Flagsmith/sdk-spec
       tags:
         description: >-
-          pytest marker expression selecting scenarios by Gherkin tag, e.g. "core and not realtime".
-          Empty runs every scenario.
+          The capabilities (Gherkin tags) the SDK supports, space-separated, e.g. "core events".
+          Runs the scenarios whose capabilities are all listed. Empty runs every scenario.
         type: string
         default: ''
       language:
@@ -120,7 +120,7 @@ jobs:
           TAGS: ${{ inputs.tags }}
           MISSING_STEPS: ${{ inputs.missing-steps }}
         run: |
-          uv run pytest -v --junitxml="$GITHUB_WORKSPACE/spec-results.xml" ${TAGS:+-m "$TAGS"}
+          uv run pytest -v --junitxml="$GITHUB_WORKSPACE/spec-results.xml"
 
       - name: Show container logs
         if: failure()

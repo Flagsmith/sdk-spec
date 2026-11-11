@@ -25,67 +25,67 @@ jobs:
             repository: Flagsmith/flagsmith-python-client
             ref: main
             language: python
-            tags: core or events or local-evaluation
+            tags: core events local-evaluation
           - name: nodejs
             repository: Flagsmith/flagsmith-nodejs-client
             ref: main
             language: nodejs
-            tags: core or events or local-evaluation
+            tags: core events local-evaluation
           - name: java
             repository: Flagsmith/flagsmith-java-client
             ref: main
             language: java
-            tags: core or events or local-evaluation
+            tags: core events local-evaluation
           - name: dotnet
             repository: Flagsmith/flagsmith-dotnet-client
             ref: main
             language: dotnet
-            tags: core or events or local-evaluation
+            tags: core events local-evaluation
           - name: go
             repository: Flagsmith/flagsmith-go-client
             ref: main
             language: go
-            tags: core or events or local-evaluation
+            tags: core events local-evaluation
           - name: ruby
             repository: Flagsmith/flagsmith-ruby-client
             ref: main
             language: ruby
-            tags: core or events or local-evaluation
+            tags: core events local-evaluation
           - name: php
             repository: Flagsmith/flagsmith-php-client
             ref: main
             language: php
-            tags: core or events or local-evaluation
+            tags: core events local-evaluation
           - name: rust
             repository: Flagsmith/flagsmith-rust-client
             ref: main
             language: rust
-            tags: core or events or local-evaluation
+            tags: core events local-evaluation
           - name: elixir
             repository: Flagsmith/flagsmith-elixir-client
             ref: main
             language: elixir
-            tags: core or events or local-evaluation
+            tags: core events local-evaluation
           - name: js-client
             repository: Flagsmith/flagsmith-js-client
             ref: main
             language: nodejs
-            tags: (core or events) and not local-evaluation
+            tags: core events
           - name: ios
             repository: Flagsmith/flagsmith-ios-client
             ref: main
             language: swift
-            tags: (core or events) and not local-evaluation
+            tags: core events
           - name: android
             repository: Flagsmith/flagsmith-kotlin-android-client
             ref: main
             language: kotlin
-            tags: (core or events) and not local-evaluation
+            tags: core events
           - name: flutter
             repository: Flagsmith/flagsmith-flutter-client
             ref: main
             language: dart
-            tags: (core or events) and not local-evaluation
+            tags: core events
     uses: ./.github/workflows/run-spec.yml
     with:
       spec-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
