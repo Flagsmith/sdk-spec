@@ -121,10 +121,6 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
      A `<key> | value` table arrives as a map, e.g. `{"plan": "premium", "age": 30}`.
    - Values are JSON values. Pass flag and trait values through with their types intact.
    - Steps that get flags return a list of `{"feature": …, "enabled": …, "value": …, "reason": …}`.
-     `reason` is the reason the SDK gives the application for the flag's evaluation, e.g.
-     `"TARGETING_MATCH; segment=premium_users"`: with local evaluation, the engine's
-     `FlagResult.reason`; with remote evaluation, the `reason` Flagsmith's response carries, or
-     `null` without one.
    - Let SDK errors propagate: the scenario fails with the error.
 
    Keep it to SDK calls. The steps file doubles as a working, CI-checked usage example.

@@ -1,8 +1,7 @@
 @local-evaluation
 Feature: Get identity flags with local evaluation
-  A server-side SDK evaluates the flags for an identity against the environment document, using
-  the identity's traits to evaluate segments, and tells the application why each flag has its
-  value.
+  A server-side SDK evaluates the flags for an identity against the environment document,
+  with the reason each was evaluated to its value.
 
   Background:
     Given a Flagsmith environment
