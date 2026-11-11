@@ -70,22 +70,22 @@ jobs:
             repository: Flagsmith/flagsmith-js-client
             ref: main
             language: nodejs
-            tags: core or events
+            tags: (core or events) and not local-evaluation
           - name: ios
             repository: Flagsmith/flagsmith-ios-client
             ref: main
             language: swift
-            tags: core or events
+            tags: (core or events) and not local-evaluation
           - name: android
             repository: Flagsmith/flagsmith-kotlin-android-client
             ref: main
             language: kotlin
-            tags: core or events
+            tags: (core or events) and not local-evaluation
           - name: flutter
             repository: Flagsmith/flagsmith-flutter-client
             ref: main
             language: dart
-            tags: core or events
+            tags: (core or events) and not local-evaluation
     uses: ./.github/workflows/run-spec.yml
     with:
       spec-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}

@@ -109,6 +109,8 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
    - `Create the SDK client with local evaluation` receives the same two as `Create the SDK client`,
      and returns a client that evaluates flags locally, with its environment already loaded. Only
      `@local-evaluation` scenarios use it, so an SDK without local evaluation can leave it out.
+     Client-side SDKs do not support local evaluation: they leave out both local evaluation steps
+     and deselect `@local-evaluation` scenarios (see step 3).
    - `Create the SDK client with local evaluation and events enabled` receives the same three as
      `Create the SDK client with events enabled`, and returns a client that does both. Only
      scenarios tagged both `@local-evaluation` and `@events` use it.
@@ -140,6 +142,10 @@ Each release also pins the Flagsmith version in `compose.yml` that it was verifi
          language: python
          tags: core        # optional: select capabilities
    ```
+
+   A scenario can carry several capability tags, so `core or events` still selects the
+   `@local-evaluation @events` scenarios. Client-side SDKs do not support local evaluation, and
+   exclude it explicitly: `tags: (core or events) and not local-evaluation`.
 
 4. Let Renovate bump both refs together:
 
