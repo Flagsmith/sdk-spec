@@ -1,0 +1,30 @@
+# Depot CI only calls reusable workflows from `.depot/workflows/`, and does not follow symlinks,
+# so `run-spec.yml` is kept there as a copy.
+name: Depot copy
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/run-spec.yml
+      - .depot/workflows/run-spec.yml
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/run-spec.yml
+      - .depot/workflows/run-spec.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: run-spec.yml in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Compare copies
+        run: |
+          diff -u .github/workflows/run-spec.yml .depot/workflows/run-spec.yml \
+            || { echo "::error::Copy .github/workflows/run-spec.yml to .depot/workflows/run-spec.yml"; exit 1; }

@@ -1,0 +1,138 @@
+# Reusable workflow: runs the behavioural spec at `spec-ref` against the calling SDK.
+#
+# Usage from an SDK repository:
+#
+#   jobs:
+#     sdk-spec:
+#       uses: Flagsmith/sdk-spec/.github/workflows/run-spec.yml@v0.3.0
+#       with:
+#         spec-ref: v0.3.0
+#         language: python
+name: Run SDK spec
+
+on:
+  workflow_call:
+    inputs:
+      spec-ref:
+        description: Spec tag (or commit) to run. Keep it in sync with the ref in `uses:`.
+        type: string
+        required: true
+      spec-repository:
+        description: Repository holding the spec.
+        type: string
+        default: Flagsmith/sdk-spec
+      tags:
+        description: >-
+          pytest marker expression selecting scenarios by Gherkin tag, e.g. "core and not realtime".
+          Empty runs every scenario.
+        type: string
+        default: ''
+      language:
+        description: Harness to build the SDK image with, i.e. a directory under `harness/` in the spec.
+        type: string
+        required: true
+      dockerfile:
+        description: Path to the SDK's spec Dockerfile, relative to the SDK repository root.
+        type: string
+        default: sdk-spec/Dockerfile
+      context:
+        description: Docker build context for the SDK image, relative to the SDK repository root.
+        type: string
+        default: .
+      sdk-repository:
+        description: SDK repository to test. Defaults to the calling repository.
+        type: string
+        default: ''
+      sdk-ref:
+        description: SDK ref to test. Defaults to the triggering ref.
+        type: string
+        default: ''
+      flagsmith-image:
+        description: Override the Flagsmith image the spec is pinned to.
+        type: string
+        default: ''
+      missing-steps:
+        description: >-
+          `fail` or `xfail`. With `xfail`, scenarios using a step the SDK does not implement are expected
+          failures and keep the job green; the steps are reported as warnings.
+        type: string
+        default: fail
+      results-name:
+        description: Name of the uploaded JUnit results artifact. Must be unique per workflow run.
+        type: string
+        default: sdk-spec-results
+
+permissions:
+  contents: read
+
+jobs:
+  spec:
+    name: Spec ${{ inputs.spec-ref }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SDK_IMAGE: sdk-spec-sdk:local
+      FLAGSMITH_IMAGE: ${{ inputs.flagsmith-image }}
+    steps:
+      - name: Check out SDK
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.sdk-repository || github.repository }}
+          ref: ${{ inputs.sdk-ref }}
+          path: sdk
+
+      - name: Check out spec
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.spec-repository }}
+          ref: ${{ inputs.spec-ref }}
+          path: spec
+
+      - name: Build SDK image
+        working-directory: sdk
+        env:
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          CONTEXT: ${{ inputs.context }}
+          HARNESS: ${{ github.workspace }}/spec/harness/${{ inputs.language }}
+        run: |
+          if [ ! -d "$HARNESS" ]; then
+            echo "::error::No harness for language '$(basename "$HARNESS")' in the spec"
+            exit 1
+          fi
+          docker build --tag "$SDK_IMAGE" --file "$DOCKERFILE" --build-context harness="$HARNESS" "$CONTEXT"
+
+      - name: Start Flagsmith
+        working-directory: spec
+        run: |
+          [ -n "$FLAGSMITH_IMAGE" ] || unset FLAGSMITH_IMAGE
+          docker compose up --detach --wait --wait-timeout 300
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          working-directory: spec/runner
+
+      - name: Run spec
+        working-directory: spec/runner
+        env:
+          FLAGSMITH_URL: http://localhost:8000
+          FLAGSMITH_SDK_URL: http://flagsmith:8000
+          SDK_COMMAND: docker run --interactive --rm --network sdk-spec_default ${{ env.SDK_IMAGE }}
+          TAGS: ${{ inputs.tags }}
+          MISSING_STEPS: ${{ inputs.missing-steps }}
+        run: |
+          uv run pytest -v --junitxml="$GITHUB_WORKSPACE/spec-results.xml" ${TAGS:+-m "$TAGS"}
+
+      - name: Show container logs
+        if: failure()
+        working-directory: spec
+        run: docker compose logs
+
+      - name: Upload results
+        if: always()
+        # Depot CI disables artifact writes in reusable workflows called from another repository.
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.results-name }}
+          path: spec-results.xml
+          if-no-files-found: ignore
