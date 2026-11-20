@@ -21,12 +21,27 @@ Feature: Get identity flags with traits
       | age      | 30        |
       | verified | true      |
     Then the application receives the following flags:
-      | feature   | enabled | value                |
-      | banner    | true    | "hello premium user" |
-      | max_items | true    | 10                   |
-      | tagline   | true    | ""                   |
+      | feature   | enabled | value                | reason                                   |
+      | banner    | true    | "hello premium user" | "TARGETING_MATCH; segment=premium_users" |
+      | max_items | true    | 10                   | "STATIC"                                 |
+      | tagline   | true    | ""                   | "STATIC"                                 |
     And Flagsmith has identity "user_123" with the following traits:
       | trait    | value     |
       | plan     | "premium" |
       | age      | 30        |
       | verified | true      |
+
+  Scenario: Identity flags fall back to the environment's when no segment matches
+    Given the environment has the following features:
+      | feature   | enabled | value   |
+      | banner    | true    | "hello" |
+      | max_items | true    | 10      |
+    And a segment "premium_users" where trait "plan" equals "premium"
+    And segment "premium_users" overrides feature "banner" with enabled true and value "hello premium user"
+    When the application gets the flags for identity "user_123" with traits:
+      | trait | value  |
+      | plan  | "free" |
+    Then the application receives the following flags:
+      | feature   | enabled | value   | reason    |
+      | banner    | true    | "hello" | "DEFAULT" |
+      | max_items | true    | 10      | "STATIC"  |

@@ -1,7 +1,7 @@
 @core
 Feature: Get environment flags
   An SDK fetches the flags for its environment from Flagsmith
-  and exposes each flag's name, enabled state and value to the application.
+  and exposes each flag's name, enabled state, value and reason to the application.
 
   Background:
     Given a Flagsmith environment
@@ -16,9 +16,9 @@ Feature: Get environment flags
       | tagline   | true    | ""        |
     When the application gets the environment flags
     Then the application receives the following flags:
-      | feature   | enabled | value     |
-      | banner    | true    | "welcome" |
-      | max_items | false   | 42        |
-      | dark_mode | true    | true      |
-      | beta      | true    | null      |
-      | tagline   | true    | ""        |
+      | feature   | enabled | value     | reason   |
+      | banner    | true    | "welcome" | "STATIC" |
+      | max_items | false   | 42        | "STATIC" |
+      | dark_mode | true    | true      | "STATIC" |
+      | beta      | true    | null      | "STATIC" |
+      | tagline   | true    | ""        | "STATIC" |

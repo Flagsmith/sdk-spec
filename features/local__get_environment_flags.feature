@@ -1,7 +1,7 @@
 @local-evaluation
 Feature: Get environment flags with local evaluation
   A server-side SDK evaluates the flags for its environment against the environment document,
-  serving the same flags Flagsmith would.
+  serving the same flags Flagsmith would, with the reason each was evaluated to its value.
 
   Background:
     Given a Flagsmith environment
@@ -34,5 +34,5 @@ Feature: Get environment flags with local evaluation
     And segment "premium_users" overrides feature "banner" with enabled false and value "hello premium user"
     When the application gets the environment flags
     Then the application receives the following flags:
-      | feature | enabled | value   |
-      | banner  | true    | "hello" |
+      | feature | enabled | value   | reason   |
+      | banner  | true    | "hello" | "STATIC" |
